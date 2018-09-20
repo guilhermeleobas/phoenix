@@ -50,7 +50,7 @@ void Instrument::print_instructions(Module &M){
 void Instrument::init_group_identity(){
   group_identity["add"] = 0;
   group_identity["sub"] = 0;
-  group_identity["mul"] = 0;
+  group_identity["mul"] = 1;
 }
 
 Value* Instrument::alloc_string(Instruction *I){
@@ -97,13 +97,13 @@ void Instrument::insert_inc(Module &M, Instruction *I){
   Value *cmp;
   
   if (v1->getType()->isIntegerTy(32)){
-    cmp = Builder.CreateICmpEQ(v1, Builder.getInt32(group_identity[opcode]), "cmp");
+    cmp = Builder.CreateICmpEQ(v1, Builder.getInt32(group_identity[opcode]), "compa");
   }
   else if (v1->getType()->isIntegerTy(64)) {
-    cmp = Builder.CreateICmpEQ(v1, Builder.getInt64(group_identity[opcode]), "cmp");
+    cmp = Builder.CreateICmpEQ(v1, Builder.getInt64(group_identity[opcode]), "compa");
   }
   
-	TerminatorInst *t = SplitBlockAndInsertIfThen(cmp, I, false);
+	// TerminatorInst *t = SplitBlockAndInsertIfThen(cmp, I, false);
   
   // Value *cmp = Builder.CreateICmpEQ(v0, Builder.getInt32(0), "cmp");
 
@@ -131,15 +131,21 @@ bool Instrument::runOnModule(Module &M) {
   
   init_group_identity();
 
+	bool foi=false;
+
   for (auto &F : M){
     for (auto &BB : F){
       for (auto &I : BB){
+
+				if (foi) continue;
+				errs() << "Instruction: " << I << "\n";
         
         if (BinaryOperator *bin = dyn_cast<BinaryOperator>(&I)){
-          errs() << "Binary operator " << I << "\n";
+					errs() << "\tBinaryInst\n";
           if (group_identity.find(bin->getOpcodeName()) != group_identity.end()){
-						errs() << "chamou para: " << *bin << '\n';
+						errs() << "\t\tCalled\n";
             insert_inc(M, bin);
+						// foi = true;
 					}
         }
         else if (ReturnInst *ri = dyn_cast<ReturnInst>(&I)){
