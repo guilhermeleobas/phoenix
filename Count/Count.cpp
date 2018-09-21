@@ -14,7 +14,11 @@
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/IRBuilder.h"
+#include "llvm/Support/Debug.h"
 #include "llvm/IR/IntrinsicInst.h"
+
+#include <iostream>
+#include <fstream>
 
 #include "Count.h"
 
@@ -35,20 +39,23 @@ void Count::print_instructions(Module &M){
   }
 }
 
-Value* Count::getElementPtr(Value* V, std::set<Value*> *s){
+Value* Count::getElementPtr(Value* V, std::set<Value*> *s, int depth=1){
   
   s->insert(V);
   
   if (GetElementPtrInst *ge = dyn_cast<GetElementPtrInst>(V)){
-    errs() << "Returning: " << *ge << "\n";
+    DEBUG(dbgs() << "Returning: " << *ge << "\n");
     return ge;
   }
   
   if (Instruction *ins = dyn_cast<Instruction>(V)){
     for (auto &op : ins->operands()){
       if (s->find(op) == s->end()){
-        errs() << "\tValue: " << *op << "\n";
-        Value *v = getElementPtr(op, s);
+        
+        for (int i=0; i<depth; i++)
+          DEBUG(dbgs() << "\t");
+        DEBUG(dbgs() << "[Value]: " << *op << "\n");
+        Value *v = getElementPtr(op, s, depth+1);
         if (v != nullptr)
           return v;
       }
@@ -66,24 +73,34 @@ bool Count::runOnModule(Module &M) {
       for (auto &I : BB){
         
         if (StoreInst *store = dyn_cast<StoreInst>(&I)){
+          
+          store_count++;
+          
           std::set<Value*> s;
-          errs() << "[Inst]: " << *store << "\n";
+          DEBUG(dbgs() << "[Inst]: " << *store << "\n");
           Value *v = store->getOperand(0);
           Value *ptr = store->getOperand(1);
           
+          DEBUG(dbgs() << " [Check]: " << *v << "\n");
           auto gep_v = getElementPtr(v, &s);
           s.clear();
+          DEBUG(dbgs() << " [Check]: " << *ptr << "\n");
           auto gep_ptr = getElementPtr(ptr, &s);
-          
-          if (gep_v == gep_ptr){
-            errs() << *gep_v << " -=-=-=- " << *gep_ptr << "\n";
+
+          if (gep_v != nullptr and gep_ptr != nullptr and gep_v == gep_ptr){
+            eq_count++;
+            DEBUG(dbgs() << "Equals" << *gep_v << " -=-=-=- " << *gep_ptr << "\n");
           }
           
         }
       }
     }
   }
-
+  
+  std::ofstream myfile;
+  myfile.open ("store_count.txt");
+  myfile << eq_count << ", " << store_count << "\n";
+  myfile.close();
   return true;
 }
 
