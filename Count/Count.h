@@ -2,12 +2,12 @@
 
 using namespace llvm;
 
-class Count : public ModulePass {
+class Count : public FunctionPass {
   public: 
   // Pass identifier, for LLVM's RTTI support:
   static char ID;
 
-  bool runOnModule(Module&);
+  bool runOnFunction(Function&);
   
   /*
    * Debugging method
@@ -16,7 +16,7 @@ class Count : public ModulePass {
   
   Value* getElementPtr(Value*, std::set<Value*>*, int);
   
-  Count() : ModulePass(ID), eq_count(0), store_count(0) {}
+  Count() : FunctionPass(ID), eq_count(0), store_count(0) {}
   ~Count() { }
   
   private:

@@ -26,6 +26,9 @@
 
 #include <map>
 
+// use a table to store previous results (memoize)
+// recognize a few more identities
+// memorySSA
 
 
 void Count::print_instructions(Module &M){
@@ -55,6 +58,7 @@ Value* Count::getElementPtr(Value* V, std::set<Value*> *s, int depth=1){
         for (int i=0; i<depth; i++)
           DEBUG(dbgs() << "\t");
         DEBUG(dbgs() << "[Value]: " << *op << "\n");
+        
         Value *v = getElementPtr(op, s, depth+1);
         if (v != nullptr)
           return v;
@@ -66,33 +70,31 @@ Value* Count::getElementPtr(Value* V, std::set<Value*> *s, int depth=1){
 }
 
 
-bool Count::runOnModule(Module &M) {
+bool Count::runOnFunction(Function &F) {
   
-  for (auto &F : M){
-    for (auto &BB : F){
-      for (auto &I : BB){
+  for (auto &BB : F){
+    for (auto &I : BB){
+      
+      if (StoreInst *store = dyn_cast<StoreInst>(&I)){
         
-        if (StoreInst *store = dyn_cast<StoreInst>(&I)){
-          
-          store_count++;
-          
-          std::set<Value*> s;
-          DEBUG(dbgs() << "[Inst]: " << *store << "\n");
-          Value *v = store->getOperand(0);
-          Value *ptr = store->getOperand(1);
-          
-          DEBUG(dbgs() << " [Check]: " << *v << "\n");
-          auto gep_v = getElementPtr(v, &s);
-          s.clear();
-          DEBUG(dbgs() << " [Check]: " << *ptr << "\n");
-          auto gep_ptr = getElementPtr(ptr, &s);
+        store_count++;
+        
+        std::set<Value*> s;
+        DEBUG(dbgs() << "[Inst]: " << *store << "\n");
+        Value *v = store->getOperand(0);
+        Value *ptr = store->getOperand(1);
+        
+        DEBUG(dbgs() << " [Check]: " << *v << "\n");
+        auto gep_v = getElementPtr(v, &s);
+        s.clear();
+        DEBUG(dbgs() << " [Check]: " << *ptr << "\n");
+        auto gep_ptr = getElementPtr(ptr, &s);
 
-          if (gep_v != nullptr and gep_ptr != nullptr and gep_v == gep_ptr){
-            eq_count++;
-            DEBUG(dbgs() << "Equals" << *gep_v << " -=-=-=- " << *gep_ptr << "\n");
-          }
-          
+        if (gep_v != nullptr and gep_ptr != nullptr and gep_v == gep_ptr){
+          eq_count++;
+          DEBUG(dbgs() << "Equals" << *gep_v << " -=-=-=- " << *gep_ptr << "\n");
         }
+        
       }
     }
   }
