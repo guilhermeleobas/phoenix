@@ -14,7 +14,11 @@ class Count : public FunctionPass {
    */
   void print_instructions(Module &M);
   
+  MemoryUse* getMemoryUse(const MemorySSA&, const MemoryDef*, Instruction*);
+  
   Value* getElementPtr(Value*, std::set<Value*>*, int);
+
+  void getAnalysisUsage(AnalysisUsage &AU) const;
   
   Count() : FunctionPass(ID), eq_count(0), store_count(0) {}
   ~Count() { }
