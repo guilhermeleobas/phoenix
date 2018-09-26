@@ -14,7 +14,7 @@ class Count : public FunctionPass {
    */
   void print_instructions(Module &M);
   
-  MemoryUse* getMemoryUse(const MemorySSA&, const MemoryDef*, Instruction*);
+  bool getMemoryUse(const MemorySSA&, const MemoryAccess*, Instruction*);
   
   Value* getElementPtr(Value*, std::set<Value*>*, int);
 

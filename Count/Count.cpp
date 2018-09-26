@@ -28,7 +28,7 @@
 #define DEBUG_TYPE "Count"
 
 
-std::map<Value*, Value*> mapa;
+std::map<Instruction*, bool> mapa;
 
 // use a table to store previous results (memoize)
 // recognize a few more identities
@@ -48,8 +48,8 @@ void Count::print_instructions(Module &M){
 
 Value* Count::getElementPtr(Value* V, std::set<Value*> *s, int depth=1){
   
-  if (mapa.find(V) != mapa.end())
-    return mapa[V];
+  // if (mapa.find(V) != mapa.end())
+  //   return mapa[V];
   
   s->insert(V);
   
@@ -77,87 +77,75 @@ Value* Count::getElementPtr(Value* V, std::set<Value*> *s, int depth=1){
   return nullptr;
 }
 
-MemoryUse* Count::getMemoryUse(const MemorySSA &mssa, const MemoryDef *def, Instruction *I){
+bool Count::getMemoryUse(const MemorySSA &mssa, const MemoryAccess *y, Instruction *I){
+  
+  if (mapa.find(I) != mapa.end())
+    return mapa[I];
+    
+  
   std::stack<Instruction*> s;
   std::set<Instruction*> visited;
   s.push(I);
   
   while (!s.empty()){
-    Instruction *I = s.top();
+    Instruction *I = s.top(); 
     s.pop();
+    
     if (I == nullptr)
       continue;
     
-    visited.insert(I);
+    // Check if there is an annotation associated with I
+    MemoryUseOrDef *annot = mssa.getMemoryAccess(I);
+    // if (annot)
+      // errs() << "[Annotation]: " << *annot << " --> " << *annot->getOperand(0) << " compare " << *y << "\n";
+    if (annot and y == annot->getOperand(0)){
+      // errs() << "entrou\n";
+      // if there is an annotation, grab the operand 0 and compare it with y
+      return true;
+    }
     
-    // dbgs() << "[Inst]: " << *I << "\n";
-    
-    MemoryUseOrDef *info = mssa.getMemoryAccess(I);
-    
-    if (info == nullptr){
-      for (auto &op : I->operands()){
-        Instruction *ins = dyn_cast<Instruction>(op);
-        if (visited.find(ins) == visited.end())
-          s.push(ins);
+    for (auto &op : I->operands()){
+      Instruction *ins = dyn_cast<Instruction>(op);
+      if (visited.find(ins) == visited.end()){
+        visited.insert(ins);
+        s.push(ins);
       }
+      
     }
-    else if(MemoryUse *use = dyn_cast<MemoryUse>(info)) {
-      return use;
-    }
-    
   }
   
-  return nullptr;
+  
+  return false;
 }
 
 
 bool Count::runOnFunction(Function &F) {
   
-  // for (auto &BB : F){
-  //   for (auto &I : BB){
-  //     
-  //     if (StoreInst *store = dyn_cast<StoreInst>(&I)){
-  //
-  //       store_count++;
-  //       
-  //       std::set<Value*> s;
-  //       DEBUG(dbgs() << "[Inst]: " << *store << "\n");
-  //       Value *v = store->getOperand(0);
-  //       Value *ptr = store->getOperand(1);
-  //       
-  //       DEBUG(dbgs() << " [Check]: " << *v << "\n");
-  //       auto gep_v = getElementPtr(v, &s);
-  //       s.clear();
-  //       DEBUG(dbgs() << " [Check]: " << *ptr << "\n");
-  //       auto gep_ptr = getElementPtr(ptr, &s);
-  //       
-  //       mapa[v] = gep_v;
-  //       mapa[ptr]= gep_ptr;
-  //
-  //       if (gep_v != nullptr and gep_ptr != nullptr and gep_v == gep_ptr){
-  //         eq_count++;
-  //         DEBUG(dbgs() << "Equals" << *gep_v << " -=-=-=- " << *gep_ptr << "\n");
-  //       }
-  //       
-  //     }
-  //   }
-  // }
-  
+  // An annotation of the form x = MemoryDef(y) represents a read-write access
+  // to memory. In special, any store instruction defines a new MemoryDef.
 	MemorySSA &mssa = getAnalysis<MemorySSAWrapperPass>().getMSSA();  
   
-  errs() << "[Function]: " << F.getName() << "\n";
+  DEBUG(dbgs() << "[Function]: " << F.getName() << "\n");
   for (auto &BB : F){
     for (auto &I : BB){
       if (StoreInst *store = dyn_cast<StoreInst>(&I)){
         store_count++;
-          
-        // MemoryDef* s = mssa.getMemoryAccess(store);
+        // A store instruction: `%s = store %val, %ptr` always defines a MemoryDef
+        // annotation `x = MemoryDef(y)`. We are not interested in `x` but in `y = MemoryXYZ(..)`.
+        // `y` can be obtained by `x->getOperand(0)`.
+        // 
+        // We want to check if the possible `load` that produces %val may alias with %ptr
+        // To that end, we traverse the IR backwards looking for this specific load
+        // to see if its annotation is of the form `MemoryUse(y)`
         MemoryDef *s = dyn_cast<MemoryDef>(mssa.getMemoryAccess(store));
-        MemoryUse *r = getMemoryUse(mssa, s, dyn_cast<Instruction>(store->getOperand(0)) );
-        
-        if (r != nullptr)
-          errs() << "[Inst]: " << *store << "\n" << *s << ' ' << *r << ' ' << ( r->getID() ) << "\n\n";
-        
+        Instruction *ins = dyn_cast<Instruction>(store->getOperand(0));
+        if (getMemoryUse(mssa, s->getOperand(0), ins)){
+          eq_count++;
+          mapa[ins] = true;
+        }
+        else{
+          mapa[ins] = false;
+        }
       }
     }
   }
