@@ -4,4 +4,5 @@ file(REMOVE_RECURSE build)
 
 add_subdirectory(Instrument)
 add_subdirectory(Count)
+add_subdirectory(GEP)
 add_subdirectory(Collect)
