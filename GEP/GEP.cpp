@@ -131,6 +131,26 @@ bool GEP::runOnFunction(Function &F) {
 
   for (auto &BB : F){
     for (auto &I : BB){
+      
+      // if (StoreInst *store = dyn_cast<StoreInst>(&I)){
+      //   store_count++;
+      //   auto *I = dyn_cast<Instruction>(store->getPointerOperand());
+      //   if (!I)
+      //     continue;
+      //   const std::string opcode = I->getOpcodeName();
+      //   if (opcode == "getelementptr")
+      //     eq_count++;
+      // }
+      // else if (LoadInst *load = dyn_cast<LoadInst>(&I)){
+      //   store_count;
+      //   auto *I = dyn_cast<Instruction>(load->getPointerOperand());
+      //   if (!I)
+      //     continue;
+      //   const std::string opcode = I->getOpcodeName();
+      //   if (opcode == "getelementptr")
+      //     eq_count++;
+      // }
+      
       if (StoreInst *store = dyn_cast<StoreInst>(&I)){
         store_count++;
 
@@ -145,7 +165,6 @@ bool GEP::runOnFunction(Function &F) {
           eq_count++;
           // errs() << "Equals\n";
         }
-
       }
     }
   }

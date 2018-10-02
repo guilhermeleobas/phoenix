@@ -2,49 +2,59 @@
 
 using namespace llvm;
 
-class Instrument : public ModulePass {
+class Instrument : public FunctionPass {
   public: 
   // Pass identifier, for LLVM's RTTI support:
   static char ID;
 
-  bool runOnModule(Module&);
+  bool runOnFunction(Function&);
+  
+  /*
+    Create and assign a unique ID to each LLVM::Value
+    The second method is just a syntax sugar
+  */
+  unsigned get_id(const Value*);
+  unsigned get_id(const Instruction*);
+  
+  /*
+    Keep track of every memory access
+  */
+  void record_access(Module*, Instruction*, Value*, const std::string&);
 
-  /*
-    Inserts in the program a function call to dump a csv
-  */
-  void insert_dump_call(Module &M, Instruction *I);
   
-  /*
-   * return the identity element given the opcode 
-   */
-  void init_group_identity(void);
-  
-  /*
-    Debugging method
-  */
+  // Debugging method
   void print_instructions(Module &M);
 
   /*
-    Allocate in the stack a new char* with the opcodeName of the 
-    instruction. For instance, if the instruction is:
-    ` store i32 %n, i32* %n.addr, align 4 `
-    This function will create the following instruction:
-    ` @0 = private unnamed_addr constant [6 x i8] c"store" `
+    Create a global counter called "timestamp"
   */
-  Value* alloc_string(Instruction *I);
-  Value* alloc_counter(Module &M, Instruction *I);
-
+  void create_counter(Module *M);
+  
   /*
-    Add an external call to @count_instruction.
-    @param Module is self-explanatory
-    @param Instruction is the instruction we want to count
-    `count_instruction` is defined in the file Collect/collect.c
+    Initialize the instrumentation code
   */
-  void insert_inc(Module &M, Instruction *inst);
+  void init_instrumentation(Module*);
+  
+  
+  /*
+    Alloc a global string pointer to load and store
+  */
+  // void alloc_opcode_to_string_ptr(Instruction*, const std::string&);
+  // Value* get_opcode_string_ptr(Instruction*);
 
-  Instrument() : ModulePass(ID) {}
+  // Inserts in the program a function call to dump a csv
+  void insert_dump_call(Module*);
+  void insert_dump_call(Module*, Instruction*);
+  
+  Instrument() : FunctionPass(ID) {}
   ~Instrument() { }
-
+  
+  private:
+  
+  GlobalVariable *gv_ts;
+  std::map<const Value*, unsigned> IDs;
+  std::map<const std::string, Value*> opcode_map;
+  
 };
 
 
