@@ -33,5 +33,6 @@ void init(){
 }
 
 void dump(){
-  fprintf(FILENAME, "%lld\n", counter);
+  FILE *f = fopen(FILENAME, "w");
+  fprintf(f, "%lld\n", counter);
 }
