@@ -28,12 +28,10 @@ void record_store(void *address){
 }
 
 void init(){
-  printf("chamou init\n");
   for (int i=0; i<MAX; i++)
     records[i] = NULL;
-  printf("foi\n");
 }
 
 void dump(){
-  printf("eq: %lld\n", counter);
+  fprintf(FILENAME, "%lld\n", counter);
 }

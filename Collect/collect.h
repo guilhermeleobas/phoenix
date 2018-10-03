@@ -1,6 +1,6 @@
 #pragma once
 
-#define FILENAME "count.csv"
+#define FILENAME "store_count.txt"
 #define MAX 10000
 
 // static std::map<long long, void*> records;
