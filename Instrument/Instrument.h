@@ -14,12 +14,13 @@ class Instrument : public FunctionPass {
     The second method is just a syntax sugar
   */
   unsigned get_id(const Value*);
-  unsigned get_id(const Instruction*);
+  unsigned get_id(const LoadInst*);
   
   /*
     Keep track of every memory access
   */
-  void record_access(Module*, Instruction*, Value*, const std::string&);
+  void record_access(Module*, LoadInst*, Value*, const std::string&);
+  void record_access(Module*, StoreInst*, Value*, const std::string&);
 
   
   // Debugging method
@@ -36,12 +37,6 @@ class Instrument : public FunctionPass {
   void init_instrumentation(Module*);
   
   
-  /*
-    Alloc a global string pointer to load and store
-  */
-  // void alloc_opcode_to_string_ptr(Instruction*, const std::string&);
-  // Value* get_opcode_string_ptr(Instruction*);
-
   // Inserts in the program a function call to dump a csv
   void insert_dump_call(Module*);
   void insert_dump_call(Module*, Instruction*);
@@ -53,6 +48,7 @@ class Instrument : public FunctionPass {
   
   GlobalVariable *gv_ts;
   std::map<const Value*, unsigned> IDs;
+  bool go = false;
   std::map<const std::string, Value*> opcode_map;
   
 };
