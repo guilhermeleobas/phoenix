@@ -12,6 +12,6 @@ static int max_id = 0;
 void record_load(long long, void*);
 void record_store(void*);
 
-void init();
-void dump();
+void init_instrumentation();
+void dump_txt();
 

@@ -99,7 +99,7 @@ void Instrument::insert_dump_call(Module *M, Instruction *I){
   IRBuilder<> Builder(I);
 
   // Let's create the function call
-  Constant *const_function = M->getOrInsertFunction("dump",
+  Constant *const_function = M->getOrInsertFunction("dump_txt",
     FunctionType::getVoidTy(M->getContext()));
 
   Function *f = cast<Function>(const_function);
@@ -142,7 +142,7 @@ void Instrument::init_instrumentation(Module *M){
   
   IRBuilder<> Builder(ins);
   
-  Constant *const_function = M->getOrInsertFunction("init",
+  Constant *const_function = M->getOrInsertFunction("init_instrumentation",
       FunctionType::getVoidTy(M->getContext()));
   
   Function *f = cast<Function>(const_function);

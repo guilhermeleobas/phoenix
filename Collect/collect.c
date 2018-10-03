@@ -27,12 +27,12 @@ void record_store(void *address){
   
 }
 
-void init(){
+void init_instrumentation(){
   for (int i=0; i<MAX; i++)
     records[i] = NULL;
 }
 
-void dump(){
+void dump_txt(){
   FILE *f = fopen(FILENAME, "w");
   fprintf(f, "%lld\n", counter);
 }
