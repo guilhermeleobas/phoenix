@@ -2,25 +2,32 @@
 
 using namespace llvm;
 
-class Instrument : public FunctionPass {
+class Instrument : public ModulePass {
   public: 
   // Pass identifier, for LLVM's RTTI support:
   static char ID;
 
-  bool runOnFunction(Function&);
+  bool runOnModule(Module&);
+
+  /*
+    Create a unique ID for each load/store
+  */
+  void create_id(std::map<const Value*, unsigned> &IDs, const Value *v);
+  void create_id(const Instruction *inst);
   
   /*
     Create and assign a unique ID to each LLVM::Value
     The second method is just a syntax sugar
   */
-  unsigned get_id(const Value*);
-  unsigned get_id(const LoadInst*);
+  unsigned get_id(std::map<const Value*, unsigned> &IDs, const Value*);
+  unsigned get_id(const Instruction*);
   
   /*
     Keep track of every memory access
   */
-  void record_access(Module*, LoadInst*, Value*, const std::string&);
-  void record_access(Module*, StoreInst*, Value*, const std::string&);
+  void record_access(Module &M, LoadInst*, Value*, const std::string&);
+  void record_access(Module &M, StoreInst*, Value*, const std::string&);
+  void count_store (Module &M, StoreInst*);
 
   
   // Debugging method
@@ -29,26 +36,39 @@ class Instrument : public FunctionPass {
   /*
     Create a global counter called "timestamp"
   */
-  void create_counter(Module *M);
+  void create_counter(Module &M);
   
   /*
     Initialize the instrumentation code
   */
-  void init_instrumentation(Module*);
+  void init_instrumentation(Module &M);
   
   
   // Inserts in the program a function call to dump a csv
-  void insert_dump_call(Module*);
-  void insert_dump_call(Module*, Instruction*);
+  void insert_dump_call(Module &M);
+  void insert_dump_call(Module &M, Instruction*);
+
+  //
+  bool is_arithmetic_inst(const Instruction*);
+  bool dfs(const Instruction *source, const Instruction *dest,
+           std::set<std::pair<const Instruction *, bool>> &visited, bool valid);
+  void mark_dependencies(Module &M);
+
+
+  void getAnalysisUsage(AnalysisUsage &AU) const;
   
-  Instrument() : FunctionPass(ID) {}
+  Instrument() : ModulePass(ID) {}
   ~Instrument() { }
   
   private:
   
-  GlobalVariable *gv_ts;
-  std::map<const Value*, unsigned> IDs;
-  bool go = false;
+  GlobalVariable *gv_ts; // timestamp
+
+  std::map<const Value*, unsigned> load_ids;
+  std::map<const Value*, unsigned> store_ids;
+
+  std::set<int> stores_used, loads_used;
+  
   std::map<const std::string, Value*> opcode_map;
   
 };

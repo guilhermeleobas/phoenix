@@ -5,34 +5,61 @@
 
 #include "collect.h"
 
-#define max(a, b) ((a > b) ? (a) : (b))
-
 void record_load(long long id, void *address){
-  /* printf("Record load with ID: %lld -> %p\n", id, address); */
+   // printf("Record load with ID: %lld -> %p\n", id, address); 
   records[id] = address;
-  max_id = max(max_id, id);
 }
 
-void record_store(void *address){
-  /* printf("Record store %p\n", address); */
-  
-  /* printf("max_id: %d\n", max_id); */
-  
-  for (int i=0; i<=max_id; i++){
-    if (records[i] == address){ 
+void record_store(long long store_id, void *address){
+   // printf("Record store(%d) %p\n", store_id, address);
+
+  int i = 0;
+  while (dependency[store_id][i] != -1){
+    int load_id = dependency[store_id][i];
+
+    // printf("\tload(%d): %p\n", load_id, records[load_id]);
+    
+    if (records[load_id] == address){
       counter++;
       return;
     }
+
+    i++;
   }
   
 }
 
+void count_store(){
+  num_stores++;
+}
+
 void init_instrumentation(){
-  for (int i=0; i<MAX; i++)
+  
+  for (int i=0; i<MAX; i++){
     records[i] = NULL;
+    dependency[i][0] = -1;
+  }
+
+  FILE *f = fopen("map.txt", "r");
+  int store_id, cnt;
+
+  while (fscanf(f, "%d %d", &store_id, &cnt) != EOF){
+    // printf("store(%d) -> ", store_id);
+    int load_id;
+    for (int i=0; i<cnt; i++){
+      fscanf(f, "%d", &load_id);
+      // printf("load(%d) ", load_id);
+      dependency[store_id][i] = load_id;
+      dependency[store_id][i+1] = -1; // mark always the next pos with a sentinel value
+    }
+    // printf("\n");
+  }
+
 }
 
 void dump_txt(){
   FILE *f = fopen(FILENAME, "w");
-  fprintf(f, "%lld\n", counter);
+  // printf("equals: %d\n", counter);
+  fprintf(f, "%lld %lld\n", counter, num_stores);
+  // fprintf(f, "%lf\n", (counter+0.0)/num_stores);
 }
