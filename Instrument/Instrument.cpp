@@ -342,22 +342,6 @@ void Instrument::mark_dependencies(Module &M) {
 /*****************************************************************************/
 
 bool Instrument::runOnModule(Module &M) {
-
-  int cnt = 0;
-
-  for (auto &F : M){
-    for (auto &BB : F){
-      for (auto &I : BB){
-        if (isa<StoreInst>(&I)){
-          cnt++;
-        }
-      }
-    }
-  }
-  errs() << "Num stores: " << cnt << "\n";
-
-  return true;
-
   /*
     Mark all dependencies between loads and stores
     This is done to avoid false positives:
