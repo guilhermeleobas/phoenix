@@ -385,13 +385,13 @@ bool Instrument::runOnModule(Module &M) {
 
           count_store(M, store);
 
-          // int store_id = get_id(store);
-          // if (stores_used.find(store_id) != stores_used.end())
-            // record_access(M, store, store->getPointerOperand(), "record_store");
+          int store_id = get_id(store);
+          if (stores_used.find(store_id) != stores_used.end())
+            record_access(M, store, store->getPointerOperand(), "record_store");
         } else if (LoadInst *load = dyn_cast<LoadInst>(&I)) {
-          // int load_id = get_id(load);
-          // if (loads_used.find(load_id) != loads_used.end())
-            // record_access(M, load, load->getPointerOperand(), "record_load");
+          int load_id = get_id(load);
+          if (loads_used.find(load_id) != loads_used.end())
+            record_access(M, load, load->getPointerOperand(), "record_load");
         }
       }
     }
