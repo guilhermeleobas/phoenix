@@ -20,7 +20,7 @@ void record_store(long long store_id, void *address){
     // printf("\tload(%d): %p\n", load_id, records[load_id]);
     
     if (records[load_id] == address){
-      counter++;
+      store_after_load++;
       return;
     }
 
@@ -30,15 +30,24 @@ void record_store(long long store_id, void *address){
 }
 
 void count_store(){
-  num_stores++;
+  num_dynamic_stores++;
 }
 
-void init_instrumentation(){
-  
-  for (int i=0; i<MAX; i++){
+void init_instrumentation(unsigned num_static_stores, unsigned num_static_loads){
+
+  // printf("#stores = %d\n", num_static_stores);
+  // printf("#loads = %d\n", num_static_loads);
+
+  records = (void*) malloc(sizeof(void*) * num_static_loads);
+  for (int i=0; i<num_static_loads; i++)
     records[i] = NULL;
+
+  dependency = (int**) malloc(sizeof(int*) * num_static_stores);
+  for (int i=0; i<num_static_stores; i++){
+    dependency[i] = malloc(sizeof(int) * num_static_loads);
     dependency[i][0] = -1;
   }
+
 
   FILE *f = fopen("map.txt", "r");
   int store_id, cnt;
@@ -60,6 +69,6 @@ void init_instrumentation(){
 void dump_txt(){
   FILE *f = fopen(FILENAME, "w");
   // printf("equals: %d\n", counter);
-  fprintf(f, "%lld %lld\n", counter, num_stores);
-  // fprintf(f, "%lf\n", (counter+0.0)/num_stores);
+  fprintf(f, "%lld %lld\n", store_after_load, num_dynamic_stores);
+  printf("%lld %lld\n", store_after_load, num_dynamic_stores);
 }

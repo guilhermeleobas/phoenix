@@ -41,7 +41,12 @@ class Instrument : public ModulePass {
   /*
     Initialize the instrumentation code
   */
-  void init_instrumentation(Module &M);
+  void init_instrumentation(Module &M, const unsigned num_static_stores, const unsigned num_static_loads);
+
+  /*
+    Count the number of static instances for a given opcode
+  */
+  unsigned count_static_instances(Module &M, const unsigned opcode);
   
   
   // Inserts in the program a function call to dump a csv

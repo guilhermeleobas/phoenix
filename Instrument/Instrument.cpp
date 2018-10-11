@@ -136,13 +136,12 @@ void Instrument::count_store(Module &M, StoreInst *I) {
 
   // Let's create the function call
   Constant *const_function = M.getOrInsertFunction(
-      "count_store", FunctionType::getVoidTy(M.getContext())
-  );
+      "count_store", FunctionType::getVoidTy(M.getContext()));
 
   Function *f = cast<Function>(const_function);
 
   // Create the call
-  std::vector<Value*> args;
+  std::vector<Value *> args;
   Builder.CreateCall(f, args);
 }
 
@@ -187,20 +186,29 @@ void Instrument::insert_dump_call(Module &M) {
 
 /*****************************************************************************/
 
-void Instrument::init_instrumentation(Module &M) {
+void Instrument::init_instrumentation(Module &M,
+                                      const unsigned num_static_stores,
+                                      const unsigned num_static_loads) {
   Function *F = M.getFunction("main");
 
-  // Instruction *ins = F->front().getFirstNonPHI();
-  Instruction *ins = F->front().getTerminator();
+  Instruction *ins = F->front().getFirstNonPHI();
+  // Instruction *ins = F->front().getTerminator();
 
   IRBuilder<> Builder(ins);
 
   Constant *const_function = M.getOrInsertFunction(
-      "init_instrumentation", FunctionType::getVoidTy(M.getContext()));
+      "init_instrumentation", FunctionType::getVoidTy(M.getContext()),
+      Type::getInt64Ty(M.getContext()), // Number of static stores
+      Type::getInt64Ty(M.getContext())  // Number of static loads
+  );
 
   Function *f = cast<Function>(const_function);
 
-  CallInst *call = Builder.CreateCall(f, std::vector<Value *>());
+  std::vector<Value *> args;
+  args.push_back(Builder.getInt64(num_static_stores));
+  args.push_back(Builder.getInt64(num_static_loads));
+
+  CallInst *call = Builder.CreateCall(f, args);
 }
 
 /*****************************************************************************/
@@ -341,6 +349,18 @@ void Instrument::mark_dependencies(Module &M) {
 
 /*****************************************************************************/
 
+unsigned Instrument::count_static_instances(Module &M, const unsigned opcode) {
+  unsigned cnt = 0;
+
+  for (auto &F : M)
+    for (auto &BB : F)
+      for (auto &I : BB)
+        if (I.getOpcode() == opcode)
+          cnt++;
+
+  return cnt;
+}
+
 bool Instrument::runOnModule(Module &M) {
   /*
     Mark all dependencies between loads and stores
@@ -355,7 +375,8 @@ bool Instrument::runOnModule(Module &M) {
     Adds a call to init() and another to dump()
   */
   insert_dump_call(M);
-  init_instrumentation(M);
+  init_instrumentation(M, count_static_instances(M, Instruction::Store),
+                       count_static_instances(M, Instruction::Load));
 
   for (auto &F : M) {
     for (auto &BB : F) {
@@ -364,14 +385,13 @@ bool Instrument::runOnModule(Module &M) {
 
           count_store(M, store);
 
-          int store_id = get_id(store);
-          if (stores_used.find(store_id) != stores_used.end())
-            record_access(M, store, store->getPointerOperand(), "record_store");
-        }
-        else if (LoadInst *load = dyn_cast<LoadInst>(&I)) {
-          int load_id = get_id(load);
-          if (loads_used.find(load_id) != loads_used.end())
-            record_access(M, load, load->getPointerOperand(), "record_load");
+          // int store_id = get_id(store);
+          // if (stores_used.find(store_id) != stores_used.end())
+            // record_access(M, store, store->getPointerOperand(), "record_store");
+        } else if (LoadInst *load = dyn_cast<LoadInst>(&I)) {
+          // int load_id = get_id(load);
+          // if (loads_used.find(load_id) != loads_used.end())
+            // record_access(M, load, load->getPointerOperand(), "record_load");
         }
       }
     }

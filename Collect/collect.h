@@ -1,11 +1,15 @@
 #pragma once
 
 #define FILENAME "store_count.txt"
-#define MAX 100000
+// #define MAX 100000
 
-static void* records[MAX];
-static long long counter = 0;
-static long long num_stores = 0;
+/*
+  `records` record each memory access (load/store)
+*/
+// static void* records[MAX];
+static void** records;
+static long long store_after_load = 0;
+static long long num_dynamic_stores = 0;
 
 /*
   mapping between each store and its dependencies
@@ -15,12 +19,12 @@ static long long num_stores = 0;
   store(3) -> load(0), load(1), ...
   ...
 */
-static int dependency[MAX][MAX];
+static int** dependency;
 
 void record_load(long long, void*);
 void record_store(long long, void*);
 void count_store();
 
-void init_instrumentation();
+void init_instrumentation(unsigned total_static_stores, unsigned total_static_loads);
 void dump_txt();
 
