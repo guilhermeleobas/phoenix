@@ -70,5 +70,5 @@ void dump_txt(){
   FILE *f = fopen(FILENAME, "w");
   // printf("equals: %d\n", counter);
   fprintf(f, "%lld, %lld\n", store_after_load, num_dynamic_stores);
-  // printf("%lld, %lld\n", store_after_load, num_dynamic_stores);
+  printf("%lld, %lld\n", store_after_load, num_dynamic_stores);
 }

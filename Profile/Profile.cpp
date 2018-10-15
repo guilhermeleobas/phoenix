@@ -18,14 +18,16 @@
 
 #include <fstream>
 #include <map>
+#include <queue>
 #include <set>
 #include <stack>
 
-#include "Instrument.h"
+#include "Dfs.h"
+#include "Profile.h"
 
-#define DEBUG_TYPE "Instrument"
+#define DEBUG_TYPE "Profile"
 
-void Instrument::print_instructions(Module &M) {
+void Profile::print_instructions(Module &M) {
   for (auto &F : M) {
     for (auto &BB : F) {
       for (auto &I : BB) {
@@ -38,26 +40,26 @@ void Instrument::print_instructions(Module &M) {
 /*
  Create (if necessary) and return a unique ID for each load/store instruction
 */
-void Instrument::create_id(std::map<const Value *, unsigned> &IDs,
-                           const Value *V) {
+void Profile::create_id(std::map<const Value *, unsigned> &IDs,
+                        const Value *V) {
   IDs[V] = IDs.size();
 }
 
-void Instrument::create_id(const Instruction *inst) {
+void Profile::create_id(const Instruction *inst) {
   if (isa<LoadInst>(inst))
     create_id(load_ids, dyn_cast<const Value>(inst));
   else
     create_id(store_ids, dyn_cast<const Value>(inst));
 }
 
-unsigned Instrument::get_id(std::map<const Value *, unsigned> &IDs,
-                            const Value *V) {
+unsigned Profile::get_id(std::map<const Value *, unsigned> &IDs,
+                         const Value *V) {
   if (IDs.find(V) == IDs.end())
     IDs[V] = IDs.size();
   return IDs[V];
 }
 
-unsigned Instrument::get_id(const Instruction *inst) {
+unsigned Profile::get_id(const Instruction *inst) {
   if (isa<LoadInst>(inst)) {
     return get_id(load_ids, dyn_cast<const Value>(inst));
   } else if (isa<StoreInst>(inst)) {
@@ -72,9 +74,8 @@ unsigned Instrument::get_id(const Instruction *inst) {
     %x = load %ptr
   Record the memory position being loaded (%ptr)
 */
-void Instrument::record_access(
-    Module &M, StoreInst *I, Value *ptr,
-    const std::string &function_name = "record_store") {
+void Profile::record_access(Module &M, StoreInst *I, Value *ptr,
+                            const std::string &function_name = "record_store") {
   IRBuilder<> Builder(I);
 
   Constant *const_function = M.getOrInsertFunction(
@@ -100,9 +101,8 @@ void Instrument::record_access(
   Record the memory position %ptr whose %val is being written.
 */
 
-void Instrument::record_access(
-    Module &M, LoadInst *I, Value *ptr,
-    const std::string &function_name = "record_load") {
+void Profile::record_access(Module &M, LoadInst *I, Value *ptr,
+                            const std::string &function_name = "record_load") {
   IRBuilder<> Builder(I);
 
   Constant *const_function = M.getOrInsertFunction(
@@ -131,7 +131,7 @@ void Instrument::record_access(
     Proceedings of the XXII Brazilian Symposium on Programming Languages. ACM,
   2018.
 */
-void Instrument::count_store(Module &M, StoreInst *I) {
+void Profile::count_store(Module &M, StoreInst *I) {
   IRBuilder<> Builder(I);
 
   // Let's create the function call
@@ -150,7 +150,7 @@ void Instrument::count_store(Module &M, StoreInst *I) {
 /*
   Create a call to `dump_txt` function
 */
-void Instrument::insert_dump_call(Module &M, Instruction *I) {
+void Profile::insert_dump_call(Module &M, Instruction *I) {
   IRBuilder<> Builder(I);
 
   // Let's create the function call
@@ -166,7 +166,7 @@ void Instrument::insert_dump_call(Module &M, Instruction *I) {
 /*
   Find the return inst and create call to `dump_txt`
 */
-void Instrument::insert_dump_call(Module &M) {
+void Profile::insert_dump_call(Module &M) {
   for (auto &F : M) {
     for (auto &BB : F) {
       for (auto &I : BB) {
@@ -186,9 +186,8 @@ void Instrument::insert_dump_call(Module &M) {
 
 /*****************************************************************************/
 
-void Instrument::init_instrumentation(Module &M,
-                                      const unsigned num_static_stores,
-                                      const unsigned num_static_loads) {
+void Profile::init_instrumentation(Module &M, const unsigned num_static_stores,
+                                   const unsigned num_static_loads) {
   Function *F = M.getFunction("main");
 
   Instruction *ins = F->front().getFirstNonPHI();
@@ -213,7 +212,7 @@ void Instrument::init_instrumentation(Module &M,
 
 /*****************************************************************************/
 
-bool Instrument::is_arithmetic_inst(const Instruction *ins) {
+bool Profile::is_arithmetic_inst(const Instruction *ins) {
   switch (ins->getOpcode()) {
   case Instruction::Add:
   case Instruction::FAdd:
@@ -249,9 +248,9 @@ bool Instrument::is_arithmetic_inst(const Instruction *ins) {
   This function check if there is an information path from load -> store
   that goes by an arithmetic instruction
 */
-bool Instrument::dfs(const Instruction *source, const Instruction *dest,
-                     std::set<std::pair<const Instruction *, bool>> &visited,
-                     bool valid = false) {
+bool Profile::dfs(const Instruction *source, const Instruction *dest,
+                  std::set<std::pair<const Instruction *, bool>> &visited,
+                  bool valid = false) {
 
   if (source == dest && valid) {
     return true;
@@ -278,7 +277,7 @@ bool Instrument::dfs(const Instruction *source, const Instruction *dest,
   return false;
 }
 
-void Instrument::mark_dependencies(Module &M) {
+void Profile::mark_dependencies(Module &M) {
 
   // Create a unique ID for each load/store instruction
   // errs() << "Instructions:\n";
@@ -299,8 +298,12 @@ void Instrument::mark_dependencies(Module &M) {
   std::map<int, std::vector<int>> dep;
 
   for (auto &F : M) {
-    // DependenceInfo *DA =
-    // &getAnalysis<DependenceAnalysisWrapperPass>(F).getDI();
+
+    if (F.isDeclaration() || F.isIntrinsic() || F.hasAvailableExternallyLinkage())
+      continue;
+
+    Dfs *D = &getAnalysis<Dfs>(F);
+
     for (auto src = inst_begin(F); src != inst_end(F); src++) {
       for (auto dest = src; dest != inst_end(F); dest++) {
         if (src == dest)
@@ -309,22 +312,23 @@ void Instrument::mark_dependencies(Module &M) {
         if (!isa<LoadInst>(*src) || !isa<StoreInst>(*dest))
           continue;
 
-        // std::unique_ptr<Dependence> ptr = DA->depends(&*src, &*dest, true);
+        D->get_all_paths(&*src, &*dest);
+
+
+        // if (&*src->getParent() != &*dest->getParent())
+        // continue;
 
         // check if there is a information flow from the load -> store
         std::set<std::pair<const Instruction *, bool>> visited;
 
-        if (&*src->getParent() != &*dest->getParent())
-          continue;
-
-        bool has_flow = dfs(&*src, &*dest, visited);
-        if (has_flow) {
-          // errs() << "Flow:\n";
-          // errs() << *src << "\n";
-          // errs() << *dest << '\n';
-          // errs() << '\n';
-          dep[get_id(&*dest)].push_back(get_id(&*src));
-        }
+        // bool has_flow = dfs(&*src, &*dest, visited);
+        // if (has_flow) {
+        //   // errs() << "Flow:\n";
+        //   // errs() << *src << "\n";
+        //   // errs() << *dest << '\n';
+        //   // errs() << '\n';
+        //   dep[get_id(&*dest)].push_back(get_id(&*src));
+        // }
       }
     }
   }
@@ -349,7 +353,7 @@ void Instrument::mark_dependencies(Module &M) {
 
 /*****************************************************************************/
 
-unsigned Instrument::count_static_instances(Module &M, const unsigned opcode) {
+unsigned Profile::count_static_instances(Module &M, const unsigned opcode) {
   unsigned cnt = 0;
 
   for (auto &F : M)
@@ -361,7 +365,8 @@ unsigned Instrument::count_static_instances(Module &M, const unsigned opcode) {
   return cnt;
 }
 
-bool Instrument::runOnModule(Module &M) {
+bool Profile::runOnModule(Module &M) {
+
   /*
     Mark all dependencies between loads and stores
     This is done to avoid false positives:
@@ -400,11 +405,10 @@ bool Instrument::runOnModule(Module &M) {
   return true;
 }
 
-void Instrument::getAnalysisUsage(AnalysisUsage &AU) const {
-  AU.addPreserved<DependenceAnalysisWrapperPass>();
+void Profile::getAnalysisUsage(AnalysisUsage &AU) const {
+  AU.addRequired<Dfs>();
   AU.setPreservesAll();
 }
 
-char Instrument::ID = 0;
-static RegisterPass<Instrument> X("Instrument",
-                                  "Instrument Binary Instructions");
+char Profile::ID = 0;
+static RegisterPass<Profile> X("Profile", "Profile Binary Instructions");
