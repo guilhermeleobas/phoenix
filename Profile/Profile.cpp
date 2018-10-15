@@ -238,7 +238,7 @@ void Profile::mark_dependencies(Module &M) {
     if (F.isDeclaration() || F.isIntrinsic() || F.hasAvailableExternallyLinkage())
       continue;
 
-    // errs() << "Function: " << F.getName() << "\n";
+    errs() << "Function: " << F.getName() << "\n";
 
     Dfs *D = &getAnalysis<Dfs>(F);
 

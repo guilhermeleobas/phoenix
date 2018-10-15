@@ -72,3 +72,59 @@ void dump_txt(){
   fprintf(f, "%lld, %lld\n", store_after_load, num_dynamic_stores);
   printf("%lld, %lld\n", store_after_load, num_dynamic_stores);
 }
+
+
+///////
+
+int has_identity(unsigned opcode, long long a, long long b){
+  switch(opcode){
+    case 11: // Add
+    case 13: // Sub
+    case 28: // Xor
+    case 23: // Shl
+    case 24: // LShr
+    case 25: // AShr
+      return (a == 0 || b == 0);
+    case 15: // Mul
+    case 17: // UDiv
+    case 18: // SDiv
+      return (a == 1 || b == 1);
+    case 26: // And
+    case 27: // Or
+      return (a == b);
+  }
+}
+
+// Given an arithmeic instruction of the type:
+//   c = a `op` b
+// record if the variables `a` or `b` are the identity value
+// for the arithmetic instruction given by `op`.
+void record_arith(unsigned opcode, long long a, long long b){
+  
+  int index = -1;
+  for (int i=0; i<LENGTH; i++)
+    if (data[i].opcode == opcode){
+      index = i;
+      break;
+    }
+  assert (index >= 0);
+
+  data[index].cnt++;
+  if (has_identity(opcode, a, b))
+    data[index].identity++;
+
+  // printf("opcode: %d with value: %lld\n", opcode, value);
+}
+
+void dump_arith(){
+  FILE *f = fopen("arith.txt", "w");
+
+  for (int i=0; i<LENGTH; i++){
+    fprintf(f, "%s, %llu, %llu\n", data[i].name, data[i].identity, data[i].cnt);
+    printf("%s, %llu, %llu\n", data[i].name, data[i].identity, data[i].cnt);
+  }
+  fprintf(f, "\n");
+
+  fclose(f);
+  
+}

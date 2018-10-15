@@ -30,6 +30,10 @@ public:
     return (this->types >> opcode) & 1U;
   }
 
+  bool flow_pass_by_arith_inst() const{
+    return (this->types != 0);
+  }
+
 private:
   // Calc the number of instructions in the path
   void calc_inst_distance() { this->inst_distance = this->instructions.size(); }
