@@ -212,71 +212,6 @@ void Profile::init_instrumentation(Module &M, const unsigned num_static_stores,
 
 /*****************************************************************************/
 
-bool Profile::is_arithmetic_inst(const Instruction *ins) {
-  switch (ins->getOpcode()) {
-  case Instruction::Add:
-  case Instruction::FAdd:
-  //
-  case Instruction::Sub:
-  case Instruction::FSub:
-  //
-  case Instruction::Mul:
-  case Instruction::FMul:
-  //
-  case Instruction::UDiv:
-  case Instruction::SDiv:
-  case Instruction::FDiv:
-  //
-  case Instruction::URem:
-  case Instruction::SRem:
-  case Instruction::FRem:
-  //
-  case Instruction::Shl:
-  case Instruction::LShr:
-  case Instruction::AShr:
-  //
-  case Instruction::And:
-  case Instruction::Or:
-  case Instruction::Xor:
-    return true;
-  default:
-    return false;
-  }
-}
-
-/*
-  This function check if there is an information path from load -> store
-  that goes by an arithmetic instruction
-*/
-bool Profile::dfs(const Instruction *source, const Instruction *dest,
-                  std::set<std::pair<const Instruction *, bool>> &visited,
-                  bool valid = false) {
-
-  if (source == dest && valid) {
-    return true;
-  }
-
-  for (auto V : source->users()) {
-
-    const Instruction *ins = dyn_cast<Instruction>(V);
-
-    // check if we alredy visited this instruction
-    if (visited.find(std::make_pair(ins, valid)) != visited.end())
-      continue;
-
-    // if no, add it to the list
-    visited.insert(std::make_pair(ins, valid));
-
-    bool r = dfs(dyn_cast<Instruction>(V), dest, visited,
-                 is_arithmetic_inst(ins) || valid);
-    if (r) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
 void Profile::mark_dependencies(Module &M) {
 
   // Create a unique ID for each load/store instruction
@@ -288,6 +223,7 @@ void Profile::mark_dependencies(Module &M) {
       }
     }
   }
+
 
   /*
     Map each store into its dependencies:
@@ -302,6 +238,8 @@ void Profile::mark_dependencies(Module &M) {
     if (F.isDeclaration() || F.isIntrinsic() || F.hasAvailableExternallyLinkage())
       continue;
 
+    // errs() << "Function: " << F.getName() << "\n";
+
     Dfs *D = &getAnalysis<Dfs>(F);
 
     for (auto src = inst_begin(F); src != inst_end(F); src++) {
@@ -309,26 +247,18 @@ void Profile::mark_dependencies(Module &M) {
         if (src == dest)
           continue;
 
+        // Filter by Load->Store pairs
         if (!isa<LoadInst>(*src) || !isa<StoreInst>(*dest))
           continue;
 
-        D->get_all_paths(&*src, &*dest);
-
-
-        // if (&*src->getParent() != &*dest->getParent())
-        // continue;
+        // errs() << "Testing: " << *src << " ->" << *dest << "\n";
 
         // check if there is a information flow from the load -> store
-        std::set<std::pair<const Instruction *, bool>> visited;
+        std::vector<Flowpath> fps = D->get_all_paths(&*src, &*dest);
 
-        // bool has_flow = dfs(&*src, &*dest, visited);
-        // if (has_flow) {
-        //   // errs() << "Flow:\n";
-        //   // errs() << *src << "\n";
-        //   // errs() << *dest << '\n';
-        //   // errs() << '\n';
-        //   dep[get_id(&*dest)].push_back(get_id(&*src));
-        // }
+        if (fps.size()) {
+          dep[get_id(&*dest)].push_back(get_id(&*src));
+        }
       }
     }
   }
