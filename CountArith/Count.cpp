@@ -125,6 +125,11 @@ bool Count::runOnModule(Module &M) {
     for (auto &BB : F){
       for (auto &I : BB){
         if (is_arith_inst(&I)){
+
+          if (I.getOperand(0)->getType()->isVectorTy() ||
+              I.getOperand(1)->getType()->isVectorTy())
+            continue;
+            
           track(M, &I, I.getOperand(0), I.getOperand(1));
         }
       }
