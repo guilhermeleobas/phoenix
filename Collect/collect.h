@@ -92,5 +92,5 @@ void record_id_individually(arithmetic_inst *ai, long long static_id, int is_ide
 unsigned get_index(unsigned opcode);
 void record_arith(unsigned opcode, long long static_id, void* a, void* b);
 void record_arith_int(unsigned opcode, long long static_id, long long a, long long b);
-void record_arith_float(unsigned opcode, long long static_id, long long a, long long b);
+void record_arith_float(unsigned opcode, long long static_id, double a, double b);
 

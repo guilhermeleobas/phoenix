@@ -205,7 +205,7 @@ void record_arith_int(unsigned opcode, long long static_id, long long a, long lo
   record_arith(opcode, static_id, (void*)&a, (void*)&b);
 }
 
-void record_arith_float(unsigned opcode, long long static_id, long long a, long long b){
+void record_arith_float(unsigned opcode, long long static_id, double a, double b){
   record_arith(opcode, static_id, (void*)&a, (void*)&b);
 }
 
