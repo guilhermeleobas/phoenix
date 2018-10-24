@@ -117,8 +117,11 @@ void record_id_individually(arithmetic_inst *ai, long long static_id, int has) {
 // 3 if both a and b are the identity;
 int has_identity(unsigned opcode, void* a, void* b) {
   switch (opcode) {
-  case 11: // Add
   case 13: // Sub
+    if (LL(b) == 0)
+      LL(a) == 0 ? return BOTH : return ID_B;
+    return NONE;
+  case 11: // Add
   case 28: // Xor
   case 23: // Shl
   case 24: // LShr
@@ -142,11 +145,13 @@ int has_identity(unsigned opcode, void* a, void* b) {
       return ID_B;
     else
       return NONE;
+
   case 26: // And
   case 27: // Or
-    return (LL(a) == LL(b)) ? 3 : 0;
+    return (LL(a) == LL(b)) ? BOTH : NONE;
+
   case 12: //Fadd
-  case 14: // FSub
+    // printf("Number: %lf  <-> %lf\n", DB(a), DB(b));
     if (DB(a) == 0.0 && DB(b) == 0.0)
       return BOTH;
     else if (DB(a) == 0.0)
@@ -154,6 +159,12 @@ int has_identity(unsigned opcode, void* a, void* b) {
     else if (DB(b) == 0.0)
       return ID_B;
     return NONE;
+
+  case 14: // FSub
+    if (DB(b) == 0.0)
+      DB(a) == 0 ? return BOTH : return ID_B;
+    return NONE;
+    
   case 16: // FMul
     if (DB(a) == 1.0 && DB(b) == 1.0)
       return BOTH;
