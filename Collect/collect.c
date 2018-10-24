@@ -79,6 +79,7 @@ dynamic_execution* resize(dynamic_execution *dyn, int curr_size, int new_size) {
     dyn[i].cnt_wi = 0;
     dyn[i].a = 0;
     dyn[i].b = 0;
+    dyn[i].both = 0;
   }
 
   return dyn;
@@ -94,8 +95,7 @@ void record_id_individually(arithmetic_inst *ai, long long static_id, int has) {
 
   if (has == BOTH){
     ai->dyn[static_id].cnt_id++;
-    ai->dyn[static_id].a++;
-    ai->dyn[static_id].b++;
+    ai->dyn[static_id].both++;
   }
   else if (has == ID_A){
     ai->dyn[static_id].cnt_id++;
@@ -152,7 +152,7 @@ int has_identity(unsigned opcode, void* a, void* b) {
 
   case 12: //Fadd
     // printf("Number: %lf  <-> %lf\n", DB(a), DB(b));
-    if (DB(a) == 0.0 && DB(b) == 0.0)
+    if (DB(a) == 0.00 && DB(b) == 0.00)
       return BOTH;
     else if (DB(a) == 0.0)
       return ID_A;
@@ -235,8 +235,8 @@ void dump_by_type(arithmetic_inst *ai) {
     dynamic_execution de = ai->dyn[i];
     total += de.cnt_id + de.cnt_wi;
     if (de.cnt_id >= de.cnt_wi){
-      fprintf(f, "*static_id[%d] = %lld(%lld, %lld), %lld\n", i, de.cnt_id, de.a,
-              de.b, de.cnt_wi);
+      fprintf(f, "*static_id[%d] = %lld(%lld, %lld, %lld), %lld\n", i, de.cnt_id, de.a,
+              de.b, de.both, de.cnt_wi);
     }
     else {
       fprintf(f, "static_id[%d] = %lld(%lld, %lld), %lld\n", i, de.cnt_id, de.a,

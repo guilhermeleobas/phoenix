@@ -52,7 +52,7 @@ typedef struct {
   long long cnt_id; // The number of times this instruction was executed with an identity
   long long cnt_wi; // The number of times this instruction was executed without an identity
 
-  long long a, b; // The number of times the operand a or b are the identity
+  long long a, b, both; // The number of times the operand a or b are the identity
                   // Note that cnt_id = a + b;
 } dynamic_execution;
 
