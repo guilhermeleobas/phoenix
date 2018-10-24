@@ -119,7 +119,7 @@ int has_identity(unsigned opcode, void* a, void* b) {
   switch (opcode) {
   case 13: // Sub
     if (LL(b) == 0)
-      LL(a) == 0 ? return BOTH : return ID_B;
+      return (LL(a) == 0 ? BOTH : ID_B);
     return NONE;
   case 11: // Add
   case 28: // Xor
@@ -162,9 +162,9 @@ int has_identity(unsigned opcode, void* a, void* b) {
 
   case 14: // FSub
     if (DB(b) == 0.0)
-      DB(a) == 0 ? return BOTH : return ID_B;
+      return (DB(a) == 0 ? BOTH : ID_B);
     return NONE;
-    
+
   case 16: // FMul
     if (DB(a) == 1.0 && DB(b) == 1.0)
       return BOTH;
