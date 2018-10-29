@@ -58,6 +58,10 @@ enum ID_TYPES { NONE = 0, ID_A = 1, ID_B = 2, BOTH = 3 };
 
 #define DB(a) (*(double *)(a))
 
+#define assertf(A, M, ...) if(!(A)) \
+ { fprintf(stderr, M, ##__VA_ARGS__); fprintf(stderr, "\n"); assert(A); }
+
+
 typedef struct {
   long long cnt_id;     // The number of times this instruction was executed with an
                         // identity

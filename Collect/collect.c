@@ -222,7 +222,7 @@ void record_arith(unsigned opcode, long long static_id, void* a,
                   void* b, void *dest_address, void *op_address, unsigned op_pos) {
 
   assert(op_pos == FIRST || op_pos == SECOND);
-  assert (dest_address == op_address);
+  assertf(dest_address == op_address, "%p - %p", dest_address, op_address);
 
   unsigned index = get_index(opcode);
 

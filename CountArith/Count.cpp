@@ -209,7 +209,7 @@ bool Count::check_operands_equals(const Value *vu, const Value *vv){
   // Insane check
   if (u->getType() != v->getType())
     return false;
-  
+
   return true;
 }
 
@@ -238,17 +238,17 @@ Optional<GetElementPtrInst*> Count::check_op(Value *op, GetElementPtrInst *dest_
   if (dest_gep->getType() != op_gep->getType())
     return None;
 
-  // errs() << "Check\n";
   // errs() << *dest_gep << " -- " << *dest_gep->getOperand(1) << "\n";
   // errs() << *op_gep << " -- " << *op_gep->getOperand(1) << "\n";
 
-  if (dest_gep->getOperand(0) == op_gep->getOperand(0) && // Checks if the base pointer are the same
-      check_operands_equals(dest_gep->getOperand(1), op_gep->getOperand(1))){
-    // errs() << "opa\n";
-    return op_gep;
+  if (dest_gep->getNumOperands() != op_gep->getNumOperands())
+    return None;
+  for (unsigned i = 0; i < dest_gep->getNumOperands(); i++){
+    if (!check_operands_equals(dest_gep->getOperand(i), op_gep->getOperand(i)))
+      return None;
   }
 
-  return None;
+  return op_gep;
 }
 
 Optional<Geps> Count::good_to_go(Instruction *I){
@@ -308,10 +308,14 @@ Optional<Geps> Count::good_to_go(Instruction *I){
 
   // Checks 4 and 5 are done on `check_op` function
 
+  // errs() << "[Check]: " << *I << "\n";
+
   if (Optional<GetElementPtrInst*> op_gep = check_op(a, dest_gep)){
+    // errs() << "First\n";
     return Geps(dest_gep, *op_gep, *si, FIRST);
   }
   else if (Optional<GetElementPtrInst*> op_gep = check_op(b, dest_gep)){
+    // errs() << "Second\n";
     return Geps(dest_gep, *op_gep, *si, SECOND);
   }
 
@@ -360,15 +364,15 @@ bool Count::runOnModule(Module &M) {
     for (auto &BB : F) {
       for (auto &I : BB) {
         if (Optional<Geps> g = good_to_go(&I)) {
-
           if (I.getOperand(0)->getType()->isVectorTy() ||
               I.getOperand(1)->getType()->isVectorTy())
             errs() << "Vector: " << I << "\n";
 
           if (I.getType()->isFloatingPointTy()) {
             track_float(M, &I, I.getOperand(0), I.getOperand(1), *g);
-          } else
+          } else{
             track_int(M, &I, I.getOperand(0), I.getOperand(1), *g);
+          }
         }
       }
     }
