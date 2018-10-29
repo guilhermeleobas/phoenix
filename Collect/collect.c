@@ -204,6 +204,15 @@ unsigned get_index(unsigned opcode){
   return index;
 }
 
+char* TYPE(opcode){
+  for (unsigned i = 0 ; i < LENGTH ; i++){
+    if (data[i].opcode == opcode){
+      return data[i].name;
+    }
+  }
+  assert(0);
+}
+
 // Given an arithmeic instruction of the type:
 //   c = c `op` b   or c = a `op` c
 // record if the variables `a` or `b` are the identity value
@@ -222,7 +231,7 @@ void record_arith(unsigned opcode, long long static_id, void* a,
                   void* b, void *dest_address, void *op_address, unsigned op_pos) {
 
   assert(op_pos == FIRST || op_pos == SECOND);
-  assertf(dest_address == op_address, "%p - %p", dest_address, op_address);
+  assertf(dest_address == op_address, "[%s(%lld)]: %p - %p", TYPE(opcode), static_id, dest_address, op_address);
 
   unsigned index = get_index(opcode);
 

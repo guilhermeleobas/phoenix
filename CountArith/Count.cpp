@@ -238,12 +238,17 @@ Optional<GetElementPtrInst*> Count::check_op(Value *op, GetElementPtrInst *dest_
   if (dest_gep->getType() != op_gep->getType())
     return None;
 
-  // errs() << *dest_gep << " -- " << *dest_gep->getOperand(1) << "\n";
-  // errs() << *op_gep << " -- " << *op_gep->getOperand(1) << "\n";
+  errs() << *dest_gep << "\n";
+  errs() << *op_gep << "\n";
 
   if (dest_gep->getNumOperands() != op_gep->getNumOperands())
     return None;
-  for (unsigned i = 0; i < dest_gep->getNumOperands(); i++){
+
+  // Check the base pointers first
+  if (dest_gep->getPointerOperand() != op_gep->getPointerOperand())
+    return None;
+
+  for (unsigned i = 1; i < dest_gep->getNumOperands(); i++){
     if (!check_operands_equals(dest_gep->getOperand(i), op_gep->getOperand(i)))
       return None;
   }
@@ -308,14 +313,14 @@ Optional<Geps> Count::good_to_go(Instruction *I){
 
   // Checks 4 and 5 are done on `check_op` function
 
-  // errs() << "[Check]: " << *I << "\n";
+  errs() << "[Check]: " << *I << "\n";
 
   if (Optional<GetElementPtrInst*> op_gep = check_op(a, dest_gep)){
-    // errs() << "First\n";
+    errs() << "First\n\n";
     return Geps(dest_gep, *op_gep, *si, FIRST);
   }
   else if (Optional<GetElementPtrInst*> op_gep = check_op(b, dest_gep)){
-    // errs() << "Second\n";
+    errs() << "Second\n\n";
     return Geps(dest_gep, *op_gep, *si, SECOND);
   }
 
@@ -378,7 +383,7 @@ bool Count::runOnModule(Module &M) {
     }
   }
 
-  // dump(add_map);
+  dump(fsub_map);
   // dump(fadd_map);
   // dump(fmul_map);
   // dump(fsub_map);
