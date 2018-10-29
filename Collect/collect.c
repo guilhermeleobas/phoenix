@@ -115,33 +115,39 @@ void record_id_individually(arithmetic_inst *ai, long long static_id, int has) {
 // 1 if a is the identity
 // 2 if b is the identity
 // 3 if both a and b are the identity;
-int has_identity(unsigned opcode, void* a, void* b) {
+//
+// @opcode is self-explanatory
+// @a and @b are the actual values involved in the arithmetic instruction
+// @op_pos tells whether @a or @b is the destiny operand. For instance, since
+// we only keep track of instructions of the form `*p += v`, *p is either @a or @b
+//  *p = *p + v = a + b
+//     = *p + b
+//     = a + *p
+// We only consider that there is an identity iff the operand that holds the identity
+// value is not the one indicated by op_pos. 
+//
+int has_identity(unsigned opcode, void* a, void* b, unsigned op_pos) {
   switch (opcode) {
   case 13: // Sub
-    if (LL(b) == 0)
+    if (op_pos == FIRST && LL(b) == 0) // *p = *p - 0
       return (LL(a) == 0 ? BOTH : ID_B);
     return NONE;
   case 11: // Add
   case 28: // Xor
-  case 23: // Shl
-  case 24: // LShr
-  case 25: // AShr
-    if (LL(a) == 0 && LL(b) == 0)
+    if (LL(a) == 0 && LL(b) == 0) // *p = 0 + 0 (same for xor)
       return BOTH;
-    else if (LL(a) == 0)
+    else if (op_pos == SECOND &&LL(a) == 0) // *p = 0 + *p (...)
       return ID_A;
-    else if (LL(b) == 0)
+    else if (LL(b) == 0) // *p = *p + 0 (...)
       return ID_B;
     else
       return NONE;
   case 15: // Mul
-  case 17: // UDiv
-  case 18: // SDiv
-    if (LL(a) == 1 && LL(b) == 1)
+    if (LL(a) == 1 && LL(b) == 1) // *p = 1 x 1
       return BOTH;
-    else if (LL(a) == 1)
+    else if (op_pos == SECOND && LL(a) == 1) // *p = 1 x *p
       return ID_A;
-    else if (LL(b) == 1)
+    else if (op_pos == FIRST && LL(b) == 1) // *p = *p x 1
       return ID_B;
     else
       return NONE;
@@ -151,29 +157,35 @@ int has_identity(unsigned opcode, void* a, void* b) {
     return (LL(a) == LL(b)) ? BOTH : NONE;
 
   case 12: //Fadd
-    // printf("Number: %lf  <-> %lf\n", DB(a), DB(b));
-    if (DB(a) == 0.00 && DB(b) == 0.00)
+    if (DB(a) == 0.00 && DB(b) == 0.00) // *p = 0.0 + 0.0
       return BOTH;
-    else if (DB(a) == 0.0)
+    else if (op_pos == FIRST && DB(a) == 0.0) // *p = 0.0 + *p
       return ID_A;
-    else if (DB(b) == 0.0)
+    else if (op_pos == SECOND && DB(b) == 0.0) // *p = *p + 0.0
       return ID_B;
     return NONE;
 
   case 14: // FSub
-    if (DB(b) == 0.0)
+    if (op_pos == FIRST && DB(b) == 0.0) // *p = *p - 0.0
       return (DB(a) == 0 ? BOTH : ID_B);
     return NONE;
 
   case 16: // FMul
-    if (DB(a) == 1.0 && DB(b) == 1.0)
+    if (DB(a) == 1.0 && DB(b) == 1.0) // *p = 1.0 x 1.0
       return BOTH;
-    else if (DB(a) == 1.0)
+    else if (op_pos == SECOND && DB(a) == 1.0) // *p = 1.0 x *p
       return ID_A;
-    else if (DB(b) == 1.0)
+    else if (op_pos == FIRST && DB(b) == 1.0) // *p = *p x 1.0
       return ID_B;
     else
       return NONE;
+
+  case 23: // Shl
+  case 24: // LShr
+  case 25: // AShr
+  case 17: // UDiv
+  case 18: // SDiv
+
   default:
     assert(0);
   }
@@ -193,17 +205,30 @@ unsigned get_index(unsigned opcode){
 }
 
 // Given an arithmeic instruction of the type:
-//   c = a `op` b
+//   c = c `op` b   or c = a `op` c
 // record if the variables `a` or `b` are the identity value
 // for the arithmetic instruction given by `op`.
+// 
+// The question remaining is now to detect which operand is `c` (a or b)
+// To that end, we also record the address of `c` as well as the address of
+// the operand that is supposed to be `c`. This operand was detected by a static
+// analysis and may not be precise. We are sending it to check it with an assert!
+// 
+// So, `dest_address` and `op_address` are those values described below. The unsigned
+// value `op_pos` tells us which operand our static analysis detected as being `c`.
+// This value is either 1 (FIRST) or 2 (SECOND)
+//
 void record_arith(unsigned opcode, long long static_id, void* a,
-                  void* b) {
+                  void* b, void *dest_address, void *op_address, unsigned op_pos) {
+
+  assert(op_pos == FIRST || op_pos == SECOND);
+  assert (dest_address == op_address);
 
   unsigned index = get_index(opcode);
 
   data[index].total_exec++;
 
-  int has = has_identity(opcode, a, b);
+  int has = has_identity(opcode, a, b, op_pos);
   if (has)
     data[index].identity_exec++;
 
@@ -212,12 +237,15 @@ void record_arith(unsigned opcode, long long static_id, void* a,
   // printf("opcode: %d with value: %lld\n", opcode, value);
 }
 
-void record_arith_int(unsigned opcode, long long static_id, long long a, long long b){
-  record_arith(opcode, static_id, (void*)&a, (void*)&b);
+void record_arith_int(unsigned opcode, long long static_id, long long a,
+                      long long b, void *dest_address, void *op_address,
+                      unsigned op_pos) {
+  record_arith(opcode, static_id, (void*)&a, (void*)&b, dest_address, op_address, op_pos);
 }
 
-void record_arith_float(unsigned opcode, long long static_id, double a, double b){
-  record_arith(opcode, static_id, (void*)&a, (void*)&b);
+void record_arith_float(unsigned opcode, long long static_id, double a,
+                        double b, void *dest_address, void *op_address, unsigned op_pos) {
+  record_arith(opcode, static_id, (void*)&a, (void*)&b, dest_address, op_address, op_pos);
 }
 
 char* get_filename(char *name){

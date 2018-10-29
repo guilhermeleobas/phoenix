@@ -41,6 +41,13 @@ void Count::print_instructions(Module &M) {
   }
 }
 
+void Count::dump(const map<Instruction *, unsigned> &mapa) {
+  for (auto &it : mapa) {
+    errs() << "Assigning " << it.second << " to " << *it.first << "\n";
+  }
+  // errs() << "\n";
+}
+
 unsigned Count::get_id(map<Instruction *, unsigned> &mapa, Instruction *I) {
   if (mapa.find(I) == mapa.end()) {
     mapa[I] = mapa.size();
@@ -94,17 +101,20 @@ bool Count::is_arith_inst_of_interest(Instruction *I) {
   }
 }
 
-void Count::track_int(Module &M, Instruction *I, Value *op1, Value *op2) {
+void Count::track_int(Module &M, Instruction *I, Value *op1, Value *op2, Geps &g) {
   assert(is_arith_inst_of_interest(I));
 
-  IRBuilder<> Builder(I);
+  IRBuilder<> Builder(g.store); // Store is the insertion point
 
   Constant *const_function = M.getOrInsertFunction(
       "record_arith_int", FunctionType::getVoidTy(M.getContext()),
-      Type::getInt64Ty(M.getContext()),  // opcode
-      Type::getInt64Ty(M.getContext()),  // ID
-      Type::getInt64Ty(M.getContext()),  // op1
-      Type::getInt64Ty(M.getContext())); // op2
+      Type::getInt64Ty(M.getContext()),   // opcode
+      Type::getInt64Ty(M.getContext()),   // ID
+      Type::getInt64Ty(M.getContext()),   // op1
+      Type::getInt64Ty(M.getContext()),   // op2
+      Type::getInt8PtrTy(M.getContext()), // dest_address
+      Type::getInt8PtrTy(M.getContext()), // op_address
+      Type::getInt32Ty(M.getContext()));  // operand_pos
 
   Function *f = cast<Function>(const_function);
 
@@ -117,26 +127,32 @@ void Count::track_int(Module &M, Instruction *I, Value *op1, Value *op2) {
 
   // Create the call
   std::vector<Value *> params;
-  params.push_back(Builder.getInt64(I->getOpcode())); // opcode
-  params.push_back(Builder.getInt64(get_id(I)));      // ID
-  params.push_back(se1);                              // value1
-  params.push_back(se2);                              // value2
+  params.push_back(Builder.getInt64(I->getOpcode()));                          // opcode
+  params.push_back(Builder.getInt64(get_id(I)));                               // ID
+  params.push_back(se1);                                                       // value1
+  params.push_back(se2);                                                       // value2
+  params.push_back(Builder.CreateBitCast(g.dest_gep, Builder.getInt8PtrTy())); // destiny GEP
+  params.push_back(Builder.CreateBitCast(g.op_gep, Builder.getInt8PtrTy()));   // destiny GEP
+  params.push_back(Builder.getInt32(g.operand_pos));                           // Operand pos (1 or 2)
   CallInst *call = Builder.CreateCall(f, params);
 }
 
-void Count::track_float(Module &M, Instruction *I, Value *op1, Value *op2) {
+void Count::track_float(Module &M, Instruction *I, Value *op1, Value *op2, Geps &g) {
   assert(is_arith_inst_of_interest(I));
   assert(op1->getType()->isFloatingPointTy());
   assert(op2->getType()->isFloatingPointTy());
 
-  IRBuilder<> Builder(I);
+  IRBuilder<> Builder(g.store); // Store is the insertion point
 
   Constant *const_function = M.getOrInsertFunction(
       "record_arith_float", FunctionType::getVoidTy(M.getContext()),
       Type::getInt64Ty(M.getContext()),   // opcode
       Type::getInt64Ty(M.getContext()),   // ID
       Type::getDoubleTy(M.getContext()),  // op1
-      Type::getDoubleTy(M.getContext())); // op2
+      Type::getDoubleTy(M.getContext()),  // op2
+      Type::getInt8PtrTy(M.getContext()), // dest_address
+      Type::getInt8PtrTy(M.getContext()), // op_address
+      Type::getInt32Ty(M.getContext()));  // operand_pos
 
   Function *f = cast<Function>(const_function);
 
@@ -149,42 +165,155 @@ void Count::track_float(Module &M, Instruction *I, Value *op1, Value *op2) {
 
   // Create the call
   std::vector<Value *> params;
-  params.push_back(Builder.getInt64(I->getOpcode())); // opcode
-  params.push_back(Builder.getInt64(get_id(I)));      // ID
-  params.push_back(se1);                              // value1
-  params.push_back(se2);                              // value2
+  params.push_back(Builder.getInt64(I->getOpcode()));                          // opcode
+  params.push_back(Builder.getInt64(get_id(I)));                               // ID
+  params.push_back(se1);                                                       // value1
+  params.push_back(se2);                                                       // value2
+  params.push_back(Builder.CreateBitCast(g.dest_gep, Builder.getInt8PtrTy())); // destiny GEP
+  params.push_back(Builder.CreateBitCast(g.op_gep, Builder.getInt8PtrTy()));   // destiny GEP
+  params.push_back(Builder.getInt32(g.operand_pos));                           // Operand pos (1 or 2)
   CallInst *call = Builder.CreateCall(f, params);
 }
 
-bool Count::can_reach_store(Instruction *I) {
+Optional<StoreInst*> Count::can_reach_store(Instruction *I) {
   assert(is_arith_inst_of_interest(I));
 
-  stack<Instruction *> s;
-  set<Instruction *> visited;
-
-  s.push(I);
-  visited.insert(I);
-
-  while (!s.empty()) {
-    Instruction *I = s.top();
-    s.pop();
-
-    for (Value *op : I->users()) {
-      if (Instruction *n = dyn_cast<Instruction>(op)) {
-
-        if (visited.find(n) != visited.end())
-          continue;
-
-        if (isa<StoreInst>(n))
-          return true;
-
-        s.push(n);
-        visited.insert(n);
-      }
+  for (Value *op : I->users()){
+    if (StoreInst *si = dyn_cast<StoreInst>(op)){
+      return si;
     }
   }
 
-  return false;
+  return None;
+}
+
+
+// Let's just check if the operands of the two instructiosn are the same 
+bool Count::check_operands_equals(const Value *vu, const Value *vv){
+
+  if (vu == vv)
+    return true;
+
+  const Instruction *u = dyn_cast<Instruction>(vu);
+  const Instruction *v = dyn_cast<Instruction>(vv);
+
+  if (u->getNumOperands() != v->getNumOperands())
+    return false;
+
+  for (unsigned i = 0; i < u->getNumOperands(); i++)
+    if (u->getOperand(i) != v->getOperand(i))
+      return false;
+
+  // Insane check
+  if (u->getType() != v->getType())
+    return false;
+  
+  return true;
+}
+
+
+// This method checks if op was produced by a LoadInst whose
+// the pointer loaded is the same as the dest_gep
+// Given that every GetElementPtrInst has a %base pointer as
+// as well as an %offset, we just compare them.
+Optional<GetElementPtrInst*> Count::check_op(Value *op, GetElementPtrInst *dest_gep){
+  if (!isa<LoadInst>(op))
+    return None;
+
+  LoadInst *li = dyn_cast<LoadInst>(op);
+
+  // To-Do, check for types other than GetElementPtrInst
+  if (!isa<GetElementPtrInst>(li->getPointerOperand()))
+    return None;
+
+  GetElementPtrInst *op_gep = dyn_cast<GetElementPtrInst>(li->getPointerOperand());
+
+  // Check 4: Pointers should be from the same basic block
+  if (dest_gep->getParent() != op_gep->getParent())
+    return None;
+
+  // Check 5: both geps should have the same type
+  if (dest_gep->getType() != op_gep->getType())
+    return None;
+
+  // errs() << "Check\n";
+  // errs() << *dest_gep << " -- " << *dest_gep->getOperand(1) << "\n";
+  // errs() << *op_gep << " -- " << *op_gep->getOperand(1) << "\n";
+
+  if (dest_gep->getOperand(0) == op_gep->getOperand(0) && // Checks if the base pointer are the same
+      check_operands_equals(dest_gep->getOperand(1), op_gep->getOperand(1))){
+    // errs() << "opa\n";
+    return op_gep;
+  }
+
+  return None;
+}
+
+Optional<Geps> Count::good_to_go(Instruction *I){
+  // Given I as
+  //   I: %dest = `op` %a, %b
+  //
+  // There are 5 conditions that should be met:
+  //  1. `I` should be an arithmetic instruction of interest
+  //
+  //  2. %dest MUST be used in a store:
+  //    store %dest, %ptr
+  //
+  //  3. either %a or %b must be loaded from the same %ptr
+  //    ptr = getElementPtr %base, %offset
+  //  Both %base and %offset should be the same
+  // 
+  //  4. Both instructions must be on the same basic block!
+  //      while (x > 0) {
+  //        y = gep p, 0, x
+  //      }
+  //      ...
+  //      z = gep p, 0, x
+  //    In the case above, geps are the same but the first one will
+  //    not have the same value all the time! Therefore, it's important
+  //    that we only check for geps that are only on the same basic block!
+  //
+  //  5. Both geps should be of the same type!
+  //       p = global int
+  //       y = gep p, 0, x
+  //       z = gep cast p to char*, 0, x
+  //     In the case above, both geps will hold diferent values since the first
+  //     is a gep for an int* and the second for a char*
+  // 
+  //  Idea: Use RangeAnalysis here to check the offset? Maybe!?
+  //  If we use RangeAnalysis, we can drop check 4 when the base pointers are the same
+
+  // Check 1
+  if (!is_arith_inst_of_interest(I))
+    return None;
+
+  // Check 2
+  Optional<StoreInst*> si = can_reach_store(I);
+  if (!si)
+    return None;
+
+  // To-Do: Check for other types? I know that %ptr can be a global variable
+  if(!isa<GetElementPtrInst>((*si)->getPointerOperand()))
+    return None;
+
+  GetElementPtrInst *dest_gep =
+      dyn_cast<GetElementPtrInst>((*si)->getPointerOperand());
+
+  // Check 3: 
+  // Perform a check on both operands
+  Value *a = I->getOperand(0);
+  Value *b = I->getOperand(1);
+
+  // Checks 4 and 5 are done on `check_op` function
+
+  if (Optional<GetElementPtrInst*> op_gep = check_op(a, dest_gep)){
+    return Geps(dest_gep, *op_gep, *si, FIRST);
+  }
+  else if (Optional<GetElementPtrInst*> op_gep = check_op(b, dest_gep)){
+    return Geps(dest_gep, *op_gep, *si, SECOND);
+  }
+
+  return None;
 }
 
 // Create a call to `dump_arith` function
@@ -220,6 +349,7 @@ void Count::insert_dump_call(Module &M) {
   }
 }
 
+
 bool Count::runOnModule(Module &M) {
 
   insert_dump_call(M);
@@ -227,20 +357,25 @@ bool Count::runOnModule(Module &M) {
   for (auto &F : M) {
     for (auto &BB : F) {
       for (auto &I : BB) {
-        if (is_arith_inst_of_interest(&I) && can_reach_store(&I)) {
+        if (Optional<Geps> g = good_to_go(&I)) {
 
           if (I.getOperand(0)->getType()->isVectorTy() ||
               I.getOperand(1)->getType()->isVectorTy())
             errs() << "Vector: " << I << "\n";
 
           if (I.getType()->isFloatingPointTy()) {
-            track_float(M, &I, I.getOperand(0), I.getOperand(1));
+            track_float(M, &I, I.getOperand(0), I.getOperand(1), *g);
           } else
-            track_int(M, &I, I.getOperand(0), I.getOperand(1));
+            track_int(M, &I, I.getOperand(0), I.getOperand(1), *g);
         }
       }
     }
   }
+
+  // dump(add_map);
+  // dump(fadd_map);
+  // dump(fmul_map);
+  // dump(fsub_map);
 
   return false;
 }
