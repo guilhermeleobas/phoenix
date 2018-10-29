@@ -190,9 +190,11 @@ Optional<StoreInst*> Count::can_reach_store(Instruction *I) {
 
 // Let's just check if the operands of the two instructiosn are the same 
 bool Count::check_operands_equals(const Value *vu, const Value *vv){
-
   if (vu == vv)
     return true;
+
+  if (!isa<Instruction>(vu) || !isa<Instruction>(vv))
+    return false;
 
   const Instruction *u = dyn_cast<Instruction>(vu);
   const Instruction *v = dyn_cast<Instruction>(vv);
