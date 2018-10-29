@@ -238,8 +238,8 @@ Optional<GetElementPtrInst*> Count::check_op(Value *op, GetElementPtrInst *dest_
   if (dest_gep->getType() != op_gep->getType())
     return None;
 
-  errs() << *dest_gep << "\n";
-  errs() << *op_gep << "\n";
+  // errs() << *dest_gep << "\n";
+  // errs() << *op_gep << "\n";
 
   if (dest_gep->getNumOperands() != op_gep->getNumOperands())
     return None;
@@ -313,14 +313,14 @@ Optional<Geps> Count::good_to_go(Instruction *I){
 
   // Checks 4 and 5 are done on `check_op` function
 
-  errs() << "[Check]: " << *I << "\n";
+  // errs() << "[Check]: " << *I << "\n";
 
   if (Optional<GetElementPtrInst*> op_gep = check_op(a, dest_gep)){
-    errs() << "First\n\n";
+    // errs() << "First\n\n";
     return Geps(dest_gep, *op_gep, *si, FIRST);
   }
   else if (Optional<GetElementPtrInst*> op_gep = check_op(b, dest_gep)){
-    errs() << "Second\n\n";
+    // errs() << "Second\n\n";
     return Geps(dest_gep, *op_gep, *si, SECOND);
   }
 
@@ -383,7 +383,7 @@ bool Count::runOnModule(Module &M) {
     }
   }
 
-  dump(fsub_map);
+  // dump(fsub_map);
   // dump(fadd_map);
   // dump(fmul_map);
   // dump(fsub_map);
