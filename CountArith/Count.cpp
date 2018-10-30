@@ -41,10 +41,27 @@ void Count::print_instructions(Module &M) {
   }
 }
 
-void Count::dump(const map<Instruction *, unsigned> &mapa) {
-  for (auto &it : mapa) {
-    errs() << "Assigning " << it.second << " to " << *it.first << "\n";
+void Count::dump(const std::string &name, const map<Instruction *, unsigned> &mapa) {
+  if (mapa.size() == 0){
+    printf("[%s]: 0\n\n", name.c_str());
+    return;
   }
+
+  printf("[%s]: %lu\n", name.c_str(), mapa.size());
+
+  for (auto &it : mapa) {
+    Instruction *I = it.first;
+    unsigned id = it.second;
+    const DebugLoc &loc = I->getDebugLoc();
+
+    if (loc)
+      errs() << "Assigning " << id << " to " << *I << " [line " << loc.getLine() << "]" << "\n";
+    else
+      errs() << "Assigning " << id << " to " << *I << "\n";
+    
+  }
+
+  printf("\n");
   // errs() << "\n";
 }
 
@@ -313,8 +330,8 @@ Optional<Geps> Count::good_to_go(Instruction *I){
 
   // Checks 4 and 5 are done on `check_op` function
 
-  // errs() << "[Check]: " << *I << "\n";
 
+  // errs() << "[Check]: " << *I << "\n";
   if (Optional<GetElementPtrInst*> op_gep = check_op(a, dest_gep)){
     // errs() << "First\n\n";
     return Geps(dest_gep, *op_gep, *si, FIRST);
@@ -383,10 +400,13 @@ bool Count::runOnModule(Module &M) {
     }
   }
 
-  // dump(fsub_map);
-  // dump(fadd_map);
-  // dump(fmul_map);
-  // dump(fsub_map);
+  dump("fadd", fadd_map);
+  dump("fsub", fsub_map);
+  dump("fmul", fmul_map);
+  dump("add", add_map);
+  dump("sub", sub_map);
+  dump("mul", mul_map);
+  dump("xor", xor_map);
 
   return false;
 }

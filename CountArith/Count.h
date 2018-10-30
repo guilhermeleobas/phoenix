@@ -32,7 +32,7 @@ public:
 
   // Debugging method
   void print_instructions(Module &M);
-  void dump(const map<Instruction *, unsigned> &mapa);
+  void dump(const std::string &name, const map<Instruction *, unsigned> &mapa);
 
   void insert_dump_call(Module &M, Instruction *I);
   void insert_dump_call(Module &M);
