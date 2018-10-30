@@ -136,7 +136,7 @@ int has_identity(unsigned opcode, void* a, void* b, unsigned op_pos) {
   case 28: // Xor
     if (LL(a) == 0 && LL(b) == 0) // *p = 0 + 0 (same for xor)
       return BOTH;
-    else if (op_pos == SECOND &&LL(a) == 0) // *p = 0 + *p (...)
+    else if (op_pos == SECOND && LL(a) == 0) // *p = 0 + *p (...)
       return ID_A;
     else if (LL(b) == 0) // *p = *p + 0 (...)
       return ID_B;
@@ -159,9 +159,9 @@ int has_identity(unsigned opcode, void* a, void* b, unsigned op_pos) {
   case 12: //Fadd
     if (DB(a) == 0.00 && DB(b) == 0.00) // *p = 0.0 + 0.0
       return BOTH;
-    else if (op_pos == FIRST && DB(a) == 0.0) // *p = 0.0 + *p
+    else if (op_pos == SECOND && DB(a) == 0.0) // *p = 0.0 + *p
       return ID_A;
-    else if (op_pos == SECOND && DB(b) == 0.0) // *p = *p + 0.0
+    else if (op_pos == FIRST && DB(b) == 0.0) // *p = *p + 0.0
       return ID_B;
     return NONE;
 

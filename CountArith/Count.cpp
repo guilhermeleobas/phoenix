@@ -54,8 +54,10 @@ void Count::dump(const std::string &name, const map<Instruction *, unsigned> &ma
     unsigned id = it.second;
     const DebugLoc &loc = I->getDebugLoc();
 
-    if (loc)
-      errs() << "Assigning " << id << " to " << *I << " [line " << loc.getLine() << "]" << "\n";
+    if (loc){
+      auto *Scope = cast<DIScope>(loc.getScope());
+      errs() << "Assigning " << id << " to " << *I << " [" << Scope->getFilename() << ":" << loc.getLine() << "]" << "\n";
+    }
     else
       errs() << "Assigning " << id << " to " << *I << "\n";
     
@@ -400,13 +402,13 @@ bool Count::runOnModule(Module &M) {
     }
   }
 
-  dump("fadd", fadd_map);
-  dump("fsub", fsub_map);
-  dump("fmul", fmul_map);
-  dump("add", add_map);
-  dump("sub", sub_map);
-  dump("mul", mul_map);
-  dump("xor", xor_map);
+  // dump("fadd", fadd_map);
+  // dump("fsub", fsub_map);
+  // dump("fmul", fmul_map);
+  // dump("add", add_map);
+  // dump("sub", sub_map);
+  // dump("mul", mul_map);
+  // dump("xor", xor_map);
 
   return false;
 }
