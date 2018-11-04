@@ -402,13 +402,13 @@ bool Count::runOnModule(Module &M) {
     }
   }
 
-  dump("fadd", fadd_map);
-  dump("fsub", fsub_map);
-  dump("fmul", fmul_map);
-  dump("add", add_map);
-  dump("sub", sub_map);
-  dump("mul", mul_map);
-  dump("xor", xor_map);
+  // dump("fadd", fadd_map);
+  // dump("fsub", fsub_map);
+  // dump("fmul", fmul_map);
+  // dump("add", add_map);
+  // dump("sub", sub_map);
+  // dump("mul", mul_map);
+  // dump("xor", xor_map);
 
   return false;
 }
