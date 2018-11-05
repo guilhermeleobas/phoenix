@@ -123,7 +123,7 @@ void record_id_individually(arithmetic_inst *ai, long long static_id, int has) {
 //  *p = *p + v = a + b
 //     = *p + b
 //     = a + *p
-// We only consider that there is an identity iff the operand that holds the identity
+// We only consider that there is an identity iff the operand holding the identity
 // value is not the one indicated by op_pos. 
 //
 int has_identity(unsigned opcode, void* a, void* b, unsigned op_pos) {
