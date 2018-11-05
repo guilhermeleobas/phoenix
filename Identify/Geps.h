@@ -1,8 +1,11 @@
 #pragma once
 
-// This instruction encapsulates the necessary things to keep track of instructions that
-// follows the patterns that we are looking for
+#include "Position.h"
+
+// This instruction encapsulates the necessary things to keep track of
+// instructions that follows the patterns that we are looking for
 struct Geps {
+public:
   // The GetElementPtrInst instructions below are used by the profiler
   // to check if the addresses are the same at runtime. Just a sanity check
   // to see how accurate our static analysis is!
@@ -22,6 +25,8 @@ struct Geps {
   StoreInst *store;
 
   Geps(GetElementPtrInst *dest, GetElementPtrInst *op, StoreInst *si,
-       unsigned pos)
-      : dest_gep(dest), op_gep(op), store(si), operand_pos(pos) {}
+       Instruction *i, unsigned pos)
+      : dest_gep(dest), op_gep(op), store(si), I(i), operand_pos(pos) {
+    assert(operand_pos == FIRST || operand_pos == SECOND);
+  }
 };

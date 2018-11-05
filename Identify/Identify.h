@@ -2,12 +2,15 @@
 
 using namespace llvm;
 
+#include <vector>
+
 #include "Position.h"
+#include "Geps.h"
 
 class Identify : public FunctionPass {
 private:
 
-  vector<Geps> instructions_of_interest;
+  std::vector<Geps> instructions_of_interest;
 
   // Check if the instruction I is an arithmetic instruction
   // of interest. We don't instrument Floating-Point instructions
@@ -28,9 +31,9 @@ public:
   static char ID;
 
   bool runOnFunction(Function &);
-
-
   void getAnalysisUsage(AnalysisUsage &AU) const;
+
+  std::vector<Geps> get_instructions_of_interest();
 
   Identify() : FunctionPass(ID) {}
   ~Identify() {}

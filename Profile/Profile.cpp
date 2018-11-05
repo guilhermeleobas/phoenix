@@ -224,7 +224,6 @@ void Profile::mark_dependencies(Module &M) {
     }
   }
 
-
   /*
     Map each store into its dependencies:
     store(0) -> load(1), load(3), load(xyz)
@@ -235,7 +234,8 @@ void Profile::mark_dependencies(Module &M) {
 
   for (auto &F : M) {
 
-    if (F.isDeclaration() || F.isIntrinsic() || F.hasAvailableExternallyLinkage())
+    if (F.isDeclaration() || F.isIntrinsic() ||
+        F.hasAvailableExternallyLinkage())
       continue;
 
     errs() << "Function: " << F.getName() << "\n";

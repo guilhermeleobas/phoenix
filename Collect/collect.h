@@ -4,15 +4,15 @@
 // where *p is a memory position and `op` is an arithmetic instruction
 // that supports identity. For instance, if `op` is add, we want to find
 // when `v` holds the value 0 (zero) and *p appears on both sides of the instruction
-// 
+//
 // We insert call to functions defined here using LLVM instrumentation
 // ... see /CountArith/Count.cpp ...
 // This library is then compiled and optimized with the final benchmark binary
-// 
+//
 
 #pragma once
 
-#include "../CountArith/Position.h"
+#include "../Identify/Position.h"
 
 #define FILENAME "store_count.txt"
 // #define MAX 100000

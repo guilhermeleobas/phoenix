@@ -66,7 +66,7 @@ Optional<StoreInst*> Identify::can_reach_store(Instruction *I) {
 }
 
 
-// Let's just check if the operands of the two instructiosn are the same 
+// Let's just check if the operands of the two instructiosn are the same
 bool Identify::check_operands_equals(const Value *vu, const Value *vv){
   if (vu == vv)
     return true;
@@ -147,7 +147,7 @@ Optional<Geps> Identify::good_to_go(Instruction *I){
   //  3. either %a or %b must be loaded from the same %ptr
   //    ptr = getElementPtr %base, %offset
   //  Both %base and %offset should be the same
-  // 
+  //
   //  4. Both instructions must be on the same basic block!
   //      while (x > 0) {
   //        y = gep p, 0, x
@@ -164,7 +164,7 @@ Optional<Geps> Identify::good_to_go(Instruction *I){
   //       z = gep cast p to char*, 0, x
   //     In the case above, both geps will hold diferent values since the first
   //     is a gep for an int* and the second for a char*
-  // 
+  //
   //  Idea: Use RangeAnalysis here to check the offset? Maybe!?
   //  If we use RangeAnalysis, we can drop check 4 when the base pointers are the same
 
@@ -184,7 +184,7 @@ Optional<Geps> Identify::good_to_go(Instruction *I){
   GetElementPtrInst *dest_gep =
       dyn_cast<GetElementPtrInst>((*si)->getPointerOperand());
 
-  // Check 3: 
+  // Check 3:
   // Perform a check on both operands
   Value *a = I->getOperand(0);
   Value *b = I->getOperand(1);
@@ -195,22 +195,28 @@ Optional<Geps> Identify::good_to_go(Instruction *I){
   // errs() << "[Check]: " << *I << "\n";
   if (Optional<GetElementPtrInst*> op_gep = check_op(a, dest_gep)){
     // errs() << "First\n\n";
-    return Geps(dest_gep, *op_gep, *si, FIRST);
+    return Geps(dest_gep, *op_gep, *si, I, FIRST);
   }
   else if (Optional<GetElementPtrInst*> op_gep = check_op(b, dest_gep)){
     // errs() << "Second\n\n";
-    return Geps(dest_gep, *op_gep, *si, SECOND);
+    return Geps(dest_gep, *op_gep, *si, I, SECOND);
   }
 
   return None;
 }
 
+std::vector<Geps> Identify::get_instructions_of_interest(){
+  return instructions_of_interest;
+}
+
 bool Identify::runOnFunction(Function &F) {
+
+  instructions_of_interest.clear();
 
   for (auto &BB : F){
     for (auto &I : BB){
       if (Optional<Geps> g = good_to_go(&I)) {
-        
+        instructions_of_interest.push_back (*g);
       }
     }
   }
@@ -221,4 +227,4 @@ bool Identify::runOnFunction(Function &F) {
 void Identify::getAnalysisUsage(AnalysisUsage &AU) const { AU.setPreservesAll(); }
 
 char Identify::ID = 0;
-static RegisterPass<Identify> X("CountArith", "Count pattern a = a OP b");
+static RegisterPass<Identify> X("Identify", "Find pattern *p = *p `op` v");
