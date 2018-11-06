@@ -17,13 +17,16 @@ private:
   // because they don't have an identity.
   bool is_arith_inst_of_interest(Instruction *I);
 
+  // Find a LoadInst that can reach the value *v
+  std::vector<LoadInst*> find_load_inst(Value *v);
+
   // Check if the current instruction I can reach a store following the control
   // flow graph. Note that I must pass the `is_arith_inst_of_interest` test
   Optional<StoreInst *> can_reach_store(Instruction *I);
 
   //
   bool check_operands_equals(const Value *vu, const Value *vv);
-  Optional<GetElementPtrInst*> check_op(Value *op, GetElementPtrInst *dest_gep);
+  Optional<GetElementPtrInst*> check_op(LoadInst *li, GetElementPtrInst *dest_gep);
   Optional<Geps> good_to_go(Instruction *I);
 
 public:

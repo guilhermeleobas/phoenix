@@ -18,16 +18,16 @@
 #include "llvm/Support/raw_ostream.h" // For dbgs()
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 
-#include "Opt.h"
+#include "Optimize.h"
 
-#define DEBUG_TYPE "Opt"
+#define DEBUG_TYPE "Optimize"
 
-bool Opt::runOnFunction(Function &F) {
+bool Optimize::runOnFunction(Function &F) {
 
   if (F.isDeclaration() || F.isIntrinsic() || F.hasAvailableExternallyLinkage())
-    return false;
+    return true;
 
-  Identify *Idn = &getAnalysis<Identify>(F);
+  Identify *Idn = &getAnalysis<Identify>();
 
   std::vector<Geps> gs = Idn->get_instructions_of_interest();
 
@@ -39,15 +39,17 @@ bool Opt::runOnFunction(Function &F) {
     if (I->getOperand(0)->getType()->isVectorTy() ||
         I->getOperand(1)->getType()->isVectorTy())
       assert(0 && "Vector type");
+
+    errs() << *I << "\n";
   }
 
-  return true;
+  return false;
 }
 
-void Opt::getAnalysisUsage(AnalysisUsage &AU) const {
+void Optimize::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<Identify>();
   AU.setPreservesAll();
 }
 
-char Opt::ID = 0;
-static RegisterPass<Opt> X("Optimize", "Optimize pattern a = a OP b");
+char Optimize::ID = 0;
+static RegisterPass<Optimize> X("Optimize", "Optimize pattern a = a OP b");

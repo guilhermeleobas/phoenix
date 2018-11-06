@@ -96,11 +96,7 @@ bool Identify::check_operands_equals(const Value *vu, const Value *vv){
 // the pointer loaded is the same as the dest_gep
 // Given that every GetElementPtrInst has a %base pointer as
 // as well as an %offset, we just compare them.
-Optional<GetElementPtrInst*> Identify::check_op(Value *op, GetElementPtrInst *dest_gep){
-  if (!isa<LoadInst>(op))
-    return None;
-
-  LoadInst *li = dyn_cast<LoadInst>(op);
+Optional<GetElementPtrInst*> Identify::check_op(LoadInst *li, GetElementPtrInst *dest_gep){
 
   // To-Do, check for types other than GetElementPtrInst
   if (!isa<GetElementPtrInst>(li->getPointerOperand()))
@@ -132,6 +128,44 @@ Optional<GetElementPtrInst*> Identify::check_op(Value *op, GetElementPtrInst *de
   }
 
   return op_gep;
+}
+
+// Iterate backwards to see if v was produced by a load
+// Only iterate on instructions on the same basic block
+std::vector<LoadInst*> Identify::find_load_inst(Value *v){
+  assert(isa<Instruction>(v));
+
+  stack<Instruction*> s;
+  s.push(dyn_cast<Instruction>(v));
+
+  set<Instruction*> visited;
+  std::vector<LoadInst*> vec;
+
+  while (!s.empty()){
+    Instruction *I = s.top();
+    s.pop();
+
+    if (LoadInst *load = dyn_cast<LoadInst>(I)){
+      vec.push_back(load);
+      continue;
+    }
+
+    for (unsigned i = 0; i < I->getNumOperands(); ++i){
+      if (Instruction *other = dyn_cast<Instruction>(I->getOperand(i))){
+        // Check if we are still in the same basic block
+        // and if we didn't visited `other`
+        if (other->getParent() != I->getParent() || visited.find(other) != visited.end())
+          continue;
+
+        visited.insert(other);
+
+        s.push(other);
+      }
+    }
+
+  }
+
+  return vec;
 }
 
 Optional<Geps> Identify::good_to_go(Instruction *I){
@@ -186,20 +220,18 @@ Optional<Geps> Identify::good_to_go(Instruction *I){
 
   // Check 3:
   // Perform a check on both operands
-  Value *a = I->getOperand(0);
-  Value *b = I->getOperand(1);
-
-  // Checks 4 and 5 are done on `check_op` function
-
-
-  // errs() << "[Check]: " << *I << "\n";
-  if (Optional<GetElementPtrInst*> op_gep = check_op(a, dest_gep)){
-    // errs() << "First\n\n";
-    return Geps(dest_gep, *op_gep, *si, I, FIRST);
-  }
-  else if (Optional<GetElementPtrInst*> op_gep = check_op(b, dest_gep)){
-    // errs() << "Second\n\n";
-    return Geps(dest_gep, *op_gep, *si, I, SECOND);
+  errs() << "inst: " << *I << "\n";
+  for (unsigned num_op = 0; num_op < 2; ++num_op){
+    if (!isa<Instruction>(I->getOperand(num_op)))
+      continue;
+    errs() << "checking: " << *I->getOperand(num_op) << '\n';
+    std::vector<LoadInst*> loads = find_load_inst(I->getOperand(num_op));
+    for (LoadInst *load : loads){
+      if (Optional<GetElementPtrInst*> op_gep = check_op(load, dest_gep)){
+        return Geps(dest_gep, *op_gep, *si, I, num_op+1);
+      }
+    }
+    errs() << '\n';
   }
 
   return None;

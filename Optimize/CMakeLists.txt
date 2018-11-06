@@ -8,7 +8,7 @@ link_directories(${LLVM_LIBRARY_DIRS})
 list(APPEND CMAKE_MODULE_PATH "${LLVM_DIR}")
 include(AddLLVM)
 
-add_llvm_loadable_module(Optimize ../Identify/Identify.cpp Opt.cpp)
+add_llvm_loadable_module(Optimize ../Identify/Identify.cpp Optimize.cpp)
 
 # Use C++11 to compile your pass (i.e., supply -std=c++11).
 target_compile_features(Optimize PRIVATE cxx_range_for cxx_auto_type)

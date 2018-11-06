@@ -5,7 +5,7 @@ using namespace llvm;
 #include "../Identify/Geps.h"
 #include "../Identify/Identify.h"
 
-class Opt : public FunctionPass{
+class Optimize : public FunctionPass{
 private:
 
 public:
@@ -16,6 +16,6 @@ public:
 
   void getAnalysisUsage(AnalysisUsage &AU) const;
 
-  Opt() : FunctionPass(ID) {}
-  ~Opt() {}
+  Optimize() : FunctionPass(ID) {}
+  ~Optimize() {}
 };
