@@ -220,11 +220,9 @@ Optional<Geps> Identify::good_to_go(Instruction *I){
 
   // Check 3:
   // Perform a check on both operands
-  errs() << "inst: " << *I << "\n";
   for (unsigned num_op = 0; num_op < 2; ++num_op){
     if (!isa<Instruction>(I->getOperand(num_op)))
       continue;
-    errs() << "checking: " << *I->getOperand(num_op) << '\n';
     std::vector<LoadInst*> loads = find_load_inst(I->getOperand(num_op));
     for (LoadInst *load : loads){
       if (Optional<GetElementPtrInst*> op_gep = check_op(load, dest_gep)){
