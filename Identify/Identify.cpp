@@ -229,7 +229,6 @@ Optional<Geps> Identify::good_to_go(Instruction *I){
         return Geps(dest_gep, *op_gep, *si, I, num_op+1);
       }
     }
-    errs() << '\n';
   }
 
   return None;
