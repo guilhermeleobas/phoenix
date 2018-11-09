@@ -5,17 +5,17 @@ using namespace llvm;
 #include "../Identify/Geps.h"
 #include "../Identify/Identify.h"
 
-class Optimize : public FunctionPass{
+class Optimize : public BasicBlockPass{
 private:
 
 public:
   // Pass identifier, for LLVM's RTTI support:
   static char ID;
 
-  bool runOnFunction(Function &);
+  bool runOnBasicBlock(BasicBlock &);
 
   void getAnalysisUsage(AnalysisUsage &AU) const;
 
-  Optimize() : FunctionPass(ID) {}
+  Optimize() : BasicBlockPass(ID) {}
   ~Optimize() {}
 };

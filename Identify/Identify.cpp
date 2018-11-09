@@ -52,12 +52,11 @@ bool Identify::is_arith_inst_of_interest(Instruction *I) {
   }
 }
 
-
-Optional<StoreInst*> Identify::can_reach_store(Instruction *I) {
+Optional<StoreInst *> Identify::can_reach_store(Instruction *I) {
   assert(is_arith_inst_of_interest(I));
 
-  for (Value *op : I->users()){
-    if (StoreInst *si = dyn_cast<StoreInst>(op)){
+  for (Value *op : I->users()) {
+    if (StoreInst *si = dyn_cast<StoreInst>(op)) {
       return si;
     }
   }
@@ -65,9 +64,8 @@ Optional<StoreInst*> Identify::can_reach_store(Instruction *I) {
   return None;
 }
 
-
 // Let's just check if the operands of the two instructiosn are the same
-bool Identify::check_operands_equals(const Value *vu, const Value *vv){
+bool Identify::check_operands_equals(const Value *vu, const Value *vv) {
   if (vu == vv)
     return true;
 
@@ -91,18 +89,19 @@ bool Identify::check_operands_equals(const Value *vu, const Value *vv){
   return true;
 }
 
-
 // This method checks if op was produced by a LoadInst whose
 // the pointer loaded is the same as the dest_gep
 // Given that every GetElementPtrInst has a %base pointer as
 // as well as an %offset, we just compare them.
-Optional<GetElementPtrInst*> Identify::check_op(LoadInst *li, GetElementPtrInst *dest_gep){
+Optional<GetElementPtrInst *> Identify::check_op(LoadInst *li,
+                                                 GetElementPtrInst *dest_gep) {
 
   // To-Do, check for types other than GetElementPtrInst
   if (!isa<GetElementPtrInst>(li->getPointerOperand()))
     return None;
 
-  GetElementPtrInst *op_gep = dyn_cast<GetElementPtrInst>(li->getPointerOperand());
+  GetElementPtrInst *op_gep =
+      dyn_cast<GetElementPtrInst>(li->getPointerOperand());
 
   // Check 4: Pointers should be from the same basic block
   if (dest_gep->getParent() != op_gep->getParent())
@@ -122,7 +121,7 @@ Optional<GetElementPtrInst*> Identify::check_op(LoadInst *li, GetElementPtrInst 
   if (dest_gep->getPointerOperand() != op_gep->getPointerOperand())
     return None;
 
-  for (unsigned i = 1; i < dest_gep->getNumOperands(); i++){
+  for (unsigned i = 1; i < dest_gep->getNumOperands(); i++) {
     if (!check_operands_equals(dest_gep->getOperand(i), op_gep->getOperand(i)))
       return None;
   }
@@ -132,29 +131,30 @@ Optional<GetElementPtrInst*> Identify::check_op(LoadInst *li, GetElementPtrInst 
 
 // Iterate backwards to see if v was produced by a load
 // Only iterate on instructions on the same basic block
-std::vector<LoadInst*> Identify::find_load_inst(Value *v){
+std::vector<LoadInst *> Identify::find_load_inst(Value *v) {
   assert(isa<Instruction>(v));
 
-  stack<Instruction*> s;
+  stack<Instruction *> s;
   s.push(dyn_cast<Instruction>(v));
 
-  set<Instruction*> visited;
-  std::vector<LoadInst*> vec;
+  set<Instruction *> visited;
+  std::vector<LoadInst *> vec;
 
-  while (!s.empty()){
+  while (!s.empty()) {
     Instruction *I = s.top();
     s.pop();
 
-    if (LoadInst *load = dyn_cast<LoadInst>(I)){
+    if (LoadInst *load = dyn_cast<LoadInst>(I)) {
       vec.push_back(load);
       continue;
     }
 
-    for (unsigned i = 0; i < I->getNumOperands(); ++i){
-      if (Instruction *other = dyn_cast<Instruction>(I->getOperand(i))){
+    for (unsigned i = 0; i < I->getNumOperands(); ++i) {
+      if (Instruction *other = dyn_cast<Instruction>(I->getOperand(i))) {
         // Check if we are still in the same basic block
         // and if we didn't visited `other`
-        if (other->getParent() != I->getParent() || visited.find(other) != visited.end())
+        if (other->getParent() != I->getParent() ||
+            visited.find(other) != visited.end())
           continue;
 
         visited.insert(other);
@@ -162,13 +162,12 @@ std::vector<LoadInst*> Identify::find_load_inst(Value *v){
         s.push(other);
       }
     }
-
   }
 
   return vec;
 }
 
-Optional<Geps> Identify::good_to_go(Instruction *I){
+Optional<Geps> Identify::good_to_go(Instruction *I) {
   // Given I as
   //   I: %dest = `op` %a, %b
   //
@@ -200,19 +199,20 @@ Optional<Geps> Identify::good_to_go(Instruction *I){
   //     is a gep for an int* and the second for a char*
   //
   //  Idea: Use RangeAnalysis here to check the offset? Maybe!?
-  //  If we use RangeAnalysis, we can drop check 4 when the base pointers are the same
+  //  If we use RangeAnalysis, we can drop check 4 when the base pointers are
+  //  the same
 
   // Check 1
   if (!is_arith_inst_of_interest(I))
     return None;
 
   // Check 2
-  Optional<StoreInst*> si = can_reach_store(I);
+  Optional<StoreInst *> si = can_reach_store(I);
   if (!si)
     return None;
 
   // To-Do: Check for other types? I know that %ptr can be a global variable
-  if(!isa<GetElementPtrInst>((*si)->getPointerOperand()))
+  if (!isa<GetElementPtrInst>((*si)->getPointerOperand()))
     return None;
 
   GetElementPtrInst *dest_gep =
@@ -220,13 +220,13 @@ Optional<Geps> Identify::good_to_go(Instruction *I){
 
   // Check 3:
   // Perform a check on both operands
-  for (unsigned num_op = 0; num_op < 2; ++num_op){
+  for (unsigned num_op = 0; num_op < 2; ++num_op) {
     if (!isa<Instruction>(I->getOperand(num_op)))
       continue;
-    std::vector<LoadInst*> loads = find_load_inst(I->getOperand(num_op));
-    for (LoadInst *load : loads){
-      if (Optional<GetElementPtrInst*> op_gep = check_op(load, dest_gep)){
-        return Geps(dest_gep, *op_gep, *si, I, num_op+1);
+    std::vector<LoadInst *> loads = find_load_inst(I->getOperand(num_op));
+    for (LoadInst *load : loads) {
+      if (Optional<GetElementPtrInst *> op_gep = check_op(load, dest_gep)) {
+        return Geps(dest_gep, *op_gep, *si, load, I, num_op + 1);
       }
     }
   }
@@ -234,26 +234,26 @@ Optional<Geps> Identify::good_to_go(Instruction *I){
   return None;
 }
 
-std::vector<Geps> Identify::get_instructions_of_interest(){
+std::vector<Geps> Identify::get_instructions_of_interest() {
   return instructions_of_interest;
 }
 
-bool Identify::runOnFunction(Function &F) {
+bool Identify::runOnBasicBlock(BasicBlock &BB) {
 
   instructions_of_interest.clear();
 
-  for (auto &BB : F){
-    for (auto &I : BB){
-      if (Optional<Geps> g = good_to_go(&I)) {
-        instructions_of_interest.push_back (*g);
-      }
+  for (auto &I : BB) {
+    if (Optional<Geps> g = good_to_go(&I)) {
+      instructions_of_interest.push_back(*g);
     }
   }
 
   return false;
 }
 
-void Identify::getAnalysisUsage(AnalysisUsage &AU) const { AU.setPreservesAll(); }
+void Identify::getAnalysisUsage(AnalysisUsage &AU) const {
+  AU.setPreservesAll();
+}
 
 char Identify::ID = 0;
 static RegisterPass<Identify> X("Identify", "Find pattern *p = *p `op` v");

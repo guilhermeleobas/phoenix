@@ -22,10 +22,14 @@
 
 #define DEBUG_TYPE "Optimize"
 
-bool Optimize::runOnFunction(Function &F) {
+void Optimize::insert_if(const Geps &g){
+  
+}
 
-  if (F.isDeclaration() || F.isIntrinsic() || F.hasAvailableExternallyLinkage())
-    return true;
+bool Optimize::runOnBasicBlock(BasicBlock &BB) {
+
+  // if (F.isDeclaration() || F.isIntrinsic() || F.hasAvailableExternallyLinkage())
+  //   return true;
 
   Identify *Idn = &getAnalysis<Identify>();
 
@@ -41,6 +45,8 @@ bool Optimize::runOnFunction(Function &F) {
       assert(0 && "Vector type");
 
     errs() << *I << "\n";
+    errs() << *g.load << "  ->" << *g.store << "\n";
+    errs() << '\n';
   }
 
   return false;

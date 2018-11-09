@@ -4,6 +4,9 @@
 
 // This instruction encapsulates the necessary things to keep track of
 // instructions that follows the patterns that we are looking for
+// The instructions of interest are of the form:
+//   I: *p = *p `op` v, 
+// where `op` can be +, -, *, /, >>, <<, ...
 struct Geps {
 public:
   // The GetElementPtrInst instructions below are used by the profiler
@@ -21,12 +24,23 @@ public:
   // *p This
   unsigned operand_pos;
 
-  // The insertion point
+  // A pointer to the instruction that stores *p (LHS)
   StoreInst *store;
 
-  Geps(GetElementPtrInst *dest, GetElementPtrInst *op, StoreInst *si,
+  // A pointer to the instruction that loads *p (RHS)
+  LoadInst *load;
+
+  Geps(GetElementPtrInst *dest, GetElementPtrInst *op, StoreInst *si, LoadInst *l,
        Instruction *i, unsigned pos)
-      : dest_gep(dest), op_gep(op), store(si), I(i), operand_pos(pos) {
+      : dest_gep(dest), op_gep(op), store(si), load(l), I(i), operand_pos(pos) {
     assert(operand_pos == FIRST || operand_pos == SECOND);
   }
+
 };
+
+
+
+
+
+
+
