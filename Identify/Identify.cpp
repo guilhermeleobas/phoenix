@@ -17,6 +17,7 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h" // For dbgs()
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
+#include "llvm/Transforms/Scalar/EarlyCSE.h"
 
 #include <fstream>
 #include <iostream>
@@ -28,7 +29,7 @@ using std::stack;
 
 #include "Identify.h"
 
-#define DEBUG_TYPE "Count"
+#define DEBUG_TYPE "Identify"
 
 bool Identify::is_arith_inst_of_interest(Instruction *I) {
   switch (I->getOpcode()) {
@@ -226,7 +227,7 @@ Optional<Geps> Identify::good_to_go(Instruction *I) {
     std::vector<LoadInst *> loads = find_load_inst(I->getOperand(num_op));
     for (LoadInst *load : loads) {
       if (Optional<GetElementPtrInst *> op_gep = check_op(load, dest_gep)) {
-        return Geps(dest_gep, *op_gep, *si, load, I, num_op + 1);
+        return Geps(dest_gep, *op_gep, *si, I, num_op + 1);
       }
     }
   }
@@ -238,13 +239,26 @@ std::vector<Geps> Identify::get_instructions_of_interest() {
   return instructions_of_interest;
 }
 
-bool Identify::runOnBasicBlock(BasicBlock &BB) {
+bool Identify::runOnFunction(Function &F) {
 
   instructions_of_interest.clear();
 
-  for (auto &I : BB) {
-    if (Optional<Geps> g = good_to_go(&I)) {
-      instructions_of_interest.push_back(*g);
+  for (auto &BB: F){
+    for (auto &I : BB) {
+      if (Optional<Geps> g = good_to_go(&I)) {
+        instructions_of_interest.push_back(*g);
+      }
+    }
+  }
+
+  for (const Geps g : instructions_of_interest){
+    const Instruction *I = g.get_instruction();
+    const DebugLoc &loc = I->getDebugLoc();
+    if (loc){
+      auto *Scope = cast<DIScope>(loc.getScope());
+      DEBUG(dbgs() << *I << " [" << Scope->getFilename() << ":" << loc.getLine()
+                   << "]"
+                   << "\n");
     }
   }
 

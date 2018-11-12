@@ -104,7 +104,7 @@ void Count::assign_id(Instruction *I) { get_id(I); }
 void Count::track_int(Module &M, Instruction *I, Value *op1, Value *op2,
                       Geps &g) {
 
-  IRBuilder<> Builder(g.store); // Store is the insertion point
+  IRBuilder<> Builder(g.get_store_inst()); // Store is the insertion point
 
   Constant *const_function = M.getOrInsertFunction(
       "record_arith_int", FunctionType::getVoidTy(M.getContext()),
@@ -132,10 +132,10 @@ void Count::track_int(Module &M, Instruction *I, Value *op1, Value *op2,
   params.push_back(se1);                              // value1
   params.push_back(se2);                              // value2
   params.push_back(
-      Builder.CreateBitCast(g.dest_gep, Builder.getInt8PtrTy())); // destiny GEP
+      Builder.CreateBitCast(g.get_dest_gep(), Builder.getInt8PtrTy())); // destiny GEP
   params.push_back(
-      Builder.CreateBitCast(g.op_gep, Builder.getInt8PtrTy())); // destiny GEP
-  params.push_back(Builder.getInt32(g.operand_pos)); // Operand pos (1 or 2)
+      Builder.CreateBitCast(g.get_op_gep(), Builder.getInt8PtrTy())); // destiny GEP
+  params.push_back(Builder.getInt32(g.get_operand_pos())); // Operand pos (1 or 2)
   CallInst *call = Builder.CreateCall(f, params);
 }
 
@@ -144,7 +144,7 @@ void Count::track_float(Module &M, Instruction *I, Value *op1, Value *op2,
   assert(op1->getType()->isFloatingPointTy());
   assert(op2->getType()->isFloatingPointTy());
 
-  IRBuilder<> Builder(g.store); // Store is the insertion point
+  IRBuilder<> Builder(g.get_store_inst()); // Store is the insertion point
 
   Constant *const_function = M.getOrInsertFunction(
       "record_arith_float", FunctionType::getVoidTy(M.getContext()),
@@ -172,10 +172,10 @@ void Count::track_float(Module &M, Instruction *I, Value *op1, Value *op2,
   params.push_back(se1);                              // value1
   params.push_back(se2);                              // value2
   params.push_back(
-      Builder.CreateBitCast(g.dest_gep, Builder.getInt8PtrTy())); // destiny GEP
+      Builder.CreateBitCast(g.get_dest_gep(), Builder.getInt8PtrTy())); // destiny GEP
   params.push_back(
-      Builder.CreateBitCast(g.op_gep, Builder.getInt8PtrTy())); // destiny GEP
-  params.push_back(Builder.getInt32(g.operand_pos)); // Operand pos (1 or 2)
+      Builder.CreateBitCast(g.get_op_gep(), Builder.getInt8PtrTy())); // destiny GEP
+  params.push_back(Builder.getInt32(g.get_operand_pos())); // Operand pos (1 or 2)
   CallInst *call = Builder.CreateCall(f, params);
 }
 
@@ -227,7 +227,7 @@ bool Count::runOnModule(Module &M) {
 
     // Let's give an id for each instruction of interest
     for (auto &g : gs) {
-      Instruction *I = g.I;
+      Instruction *I = g.get_instruction();
       assign_id(I);
 
       // sanity check for vector instructions

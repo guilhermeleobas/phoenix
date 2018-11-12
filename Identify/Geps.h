@@ -5,10 +5,10 @@
 // This instruction encapsulates the necessary things to keep track of
 // instructions that follows the patterns that we are looking for
 // The instructions of interest are of the form:
-//   I: *p = *p `op` v, 
+//   I: *p = *p `op` v,
 // where `op` can be +, -, *, /, >>, <<, ...
 struct Geps {
-public:
+private:
   // The GetElementPtrInst instructions below are used by the profiler
   // to check if the addresses are the same at runtime. Just a sanity check
   // to see how accurate our static analysis is!
@@ -16,31 +16,41 @@ public:
   GetElementPtrInst *op_gep;
 
   // The instruction where all this mess came from
+  //   I: *p_after = *p_before `op` v
+  // *p_before and *p_after refers to the same memory address
   Instruction *I;
+  Value *p_before;
+  Value *p_after;
+  Value *v;
 
-  // Given that I is of the form:
-  // I: %res = op %a, %b
-  // This integer value tell us wether %a or %b is the register that refers to
-  // *p This
+  // Is *p_before the first or the second operand?
   unsigned operand_pos;
 
   // A pointer to the instruction that stores *p (LHS)
   StoreInst *store;
 
-  // A pointer to the instruction that loads *p (RHS)
-  LoadInst *load;
-
-  Geps(GetElementPtrInst *dest, GetElementPtrInst *op, StoreInst *si, LoadInst *l,
-       Instruction *i, unsigned pos)
-      : dest_gep(dest), op_gep(op), store(si), load(l), I(i), operand_pos(pos) {
+public:
+  Geps(GetElementPtrInst *dest, GetElementPtrInst *op, StoreInst *si,
+   Instruction *I, unsigned pos)
+  : dest_gep(dest), op_gep(op), store(si), I(I), operand_pos(pos) {
     assert(operand_pos == FIRST || operand_pos == SECOND);
+
+    p_after = I;
+    p_before = I->getOperand(operand_pos - 1);
+    v = I->getOperand((operand_pos + 1) % 2);
   }
 
+  GetElementPtrInst *get_dest_gep() const { return dest_gep; }
+  GetElementPtrInst *get_op_gep() const { return op_gep; }
+  StoreInst *get_store_inst() const { return store; }
+  unsigned get_operand_pos() const { return operand_pos; }
+  Value *get_v() const { return v; }
+  Instruction *get_v_as_inst() const { return dyn_cast<Instruction>(v); }
+  Value *get_p_before() const { return p_before; }
+  Value *get_p_after() const { return p_after; }
+  Instruction *get_instruction() const { return I; }
+
+  void Print() const {
+
+  }
 };
-
-
-
-
-
-
-

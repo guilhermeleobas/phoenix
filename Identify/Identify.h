@@ -7,7 +7,7 @@ using namespace llvm;
 #include "Position.h"
 #include "Geps.h"
 
-class Identify : public BasicBlockPass {
+class Identify : public FunctionPass {
 private:
 
   std::vector<Geps> instructions_of_interest;
@@ -33,11 +33,11 @@ public:
   // Pass identifier, for LLVM's RTTI support:
   static char ID;
 
-  bool runOnBasicBlock(BasicBlock &);
+  bool runOnFunction(Function &);
   void getAnalysisUsage(AnalysisUsage &AU) const;
 
   std::vector<Geps> get_instructions_of_interest();
 
-  Identify() : BasicBlockPass(ID) {}
+  Identify() : FunctionPass(ID) {}
   ~Identify() {}
 };
