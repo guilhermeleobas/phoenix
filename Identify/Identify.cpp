@@ -16,8 +16,8 @@
 #include "llvm/Support/Debug.h" // To print error messages.
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h" // For dbgs()
-#include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Scalar/EarlyCSE.h"
+#include "llvm/Transforms/Utils/BasicBlockUtils.h"
 
 #include <fstream>
 #include <iostream>
@@ -52,6 +52,8 @@ bool Identify::is_arith_inst_of_interest(Instruction *I) {
     return false;
   }
 }
+
+//
 
 Optional<StoreInst *> Identify::can_reach_store(Instruction *I) {
   assert(is_arith_inst_of_interest(I));
@@ -132,28 +134,34 @@ Optional<GetElementPtrInst *> Identify::check_op(LoadInst *li,
 
 // Iterate backwards to see if v was produced by a load
 // Only iterate on instructions on the same basic block
-std::vector<LoadInst *> Identify::find_load_inst(Value *v) {
+std::vector<LoadInst *> Identify::find_load_inst(Instruction *I, Value *v) {
   assert(isa<Instruction>(v));
 
+  Instruction *target = dyn_cast<Instruction>(v);
+
+  if (I->getParent() != target->getParent()) {
+    return std::vector<LoadInst *>();
+  }
+
   stack<Instruction *> s;
-  s.push(dyn_cast<Instruction>(v));
+  s.push(target);
 
   set<Instruction *> visited;
   std::vector<LoadInst *> vec;
 
   while (!s.empty()) {
-    Instruction *I = s.top();
+    Instruction *aux = s.top();
     s.pop();
 
-    if (LoadInst *load = dyn_cast<LoadInst>(I)) {
+    if (LoadInst *load = dyn_cast<LoadInst>(aux)) {
       vec.push_back(load);
       continue;
     }
 
-    for (unsigned i = 0; i < I->getNumOperands(); ++i) {
-      if (Instruction *other = dyn_cast<Instruction>(I->getOperand(i))) {
+    for (unsigned i = 0; i < aux->getNumOperands(); ++i) {
+      if (Instruction *other = dyn_cast<Instruction>(aux->getOperand(i))) {
         // Check if we are still in the same basic block
-        // and if we didn't visited `other`
+        // and if we already visited `other`
         if (other->getParent() != I->getParent() ||
             visited.find(other) != visited.end())
           continue;
@@ -224,7 +232,9 @@ Optional<Geps> Identify::good_to_go(Instruction *I) {
   for (unsigned num_op = 0; num_op < 2; ++num_op) {
     if (!isa<Instruction>(I->getOperand(num_op)))
       continue;
-    std::vector<LoadInst *> loads = find_load_inst(I->getOperand(num_op));
+
+    std::vector<LoadInst *> loads = find_load_inst(I, I->getOperand(num_op));
+
     for (LoadInst *load : loads) {
       if (Optional<GetElementPtrInst *> op_gep = check_op(load, dest_gep)) {
         return Geps(dest_gep, *op_gep, *si, I, num_op + 1);
@@ -235,15 +245,35 @@ Optional<Geps> Identify::good_to_go(Instruction *I) {
   return None;
 }
 
-std::vector<Geps> Identify::get_instructions_of_interest() {
+//
+
+llvm::SmallVector<Geps, 10> Identify::get_instructions_of_interest() {
   return instructions_of_interest;
+}
+
+// Gather information about I
+// unsigned Identify::calc_loop_depth(Instruction *I) {
+//   for (LoopInfo::iterator LIT = LI.begin(); LIT != LI.end(); ++LIT) {
+//     Loop* ll = *LIT;  
+//     ll->dump();
+//   }
+//   return 0;
+// }
+
+void Identify::set_loop_depth(LoopInfo *LI, Geps &g){
+  BasicBlock *BB = g.get_instruction()->getParent();
+  unsigned depth = LI->getLoopDepth(BB);
+  g.set_loop_depth(depth);
 }
 
 bool Identify::runOnFunction(Function &F) {
 
+  // Grab loop info
+  LoopInfo *LI = &getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
+
   instructions_of_interest.clear();
 
-  for (auto &BB: F){
+  for (auto &BB : F) {
     for (auto &I : BB) {
       if (Optional<Geps> g = good_to_go(&I)) {
         instructions_of_interest.push_back(*g);
@@ -251,10 +281,13 @@ bool Identify::runOnFunction(Function &F) {
     }
   }
 
-  for (const Geps g : instructions_of_interest){
+  for(Geps &g : instructions_of_interest)
+    set_loop_depth(LI, g);
+
+  for (const Geps g : instructions_of_interest) {
     const Instruction *I = g.get_instruction();
     const DebugLoc &loc = I->getDebugLoc();
-    if (loc){
+    if (loc) {
       auto *Scope = cast<DIScope>(loc.getScope());
       DEBUG(dbgs() << *I << " [" << Scope->getFilename() << ":" << loc.getLine()
                    << "]"
@@ -266,6 +299,7 @@ bool Identify::runOnFunction(Function &F) {
 }
 
 void Identify::getAnalysisUsage(AnalysisUsage &AU) const {
+  AU.addRequired<LoopInfoWrapperPass>();
   AU.setPreservesAll();
 }
 

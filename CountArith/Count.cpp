@@ -223,7 +223,7 @@ bool Count::runOnModule(Module &M) {
 
     Identify *Idn = &getAnalysis<Identify>(F);
 
-    std::vector<Geps> gs = Idn->get_instructions_of_interest();
+    llvm::SmallVector<Geps,10> gs = Idn->get_instructions_of_interest();
 
     // Let's give an id for each instruction of interest
     for (auto &g : gs) {
