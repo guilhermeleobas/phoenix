@@ -7,7 +7,13 @@ using namespace llvm;
 
 class Optimize : public FunctionPass{
 private:
+  void move_marked_to_basic_block(llvm::SmallVector<Instruction*, 10> &marked, TerminatorInst *br);
+  llvm::SmallVector<Instruction*, 10> mark_instructions_to_be_moved(StoreInst *init);
   void insert_if(const Geps &g);
+
+  bool can_insert_if(Geps &g);
+  bool worth_insert_if(Geps &g);
+  
   Value* get_identity(const Instruction *I);
 public:
   // Pass identifier, for LLVM's RTTI support:

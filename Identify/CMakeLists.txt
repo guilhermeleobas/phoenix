@@ -19,6 +19,8 @@ set_target_properties(Identify PROPERTIES
   COMPILE_FLAGS "-fno-rtti"
 )
 
+add_definitions(-Wfatal-errors)
+
 # Get proper shared-library behavior (where symbols are not necessarily
 # resolved when the shared library is linked) on OS X.
 if(APPLE)

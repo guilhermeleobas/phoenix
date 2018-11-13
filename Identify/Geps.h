@@ -29,15 +29,17 @@ private:
   // A pointer to the instruction that stores *p (LHS)
   StoreInst *store;
 
+  unsigned loop_depth;
+
 public:
   Geps(GetElementPtrInst *dest, GetElementPtrInst *op, StoreInst *si,
    Instruction *I, unsigned pos)
-  : dest_gep(dest), op_gep(op), store(si), I(I), operand_pos(pos) {
+  : dest_gep(dest), op_gep(op), store(si), I(I), operand_pos(pos), loop_depth(0) {
     assert(operand_pos == FIRST || operand_pos == SECOND);
 
     p_after = I;
     p_before = I->getOperand(operand_pos - 1);
-    v = I->getOperand((operand_pos + 1) % 2);
+    v = I->getOperand(operand_pos == FIRST ? 1 : 0);
   }
 
   GetElementPtrInst *get_dest_gep() const { return dest_gep; }
@@ -50,7 +52,19 @@ public:
   Value *get_p_after() const { return p_after; }
   Instruction *get_instruction() const { return I; }
 
-  void Print() const {
+  unsigned get_loop_depth() const { return loop_depth; }
+  void set_loop_depth(unsigned depth) { loop_depth = depth; }
 
+  void print_instruction() const {
+    const DebugLoc &loc = I->getDebugLoc();
+    if (loc) {
+      auto *Scope = cast<DIScope>(loc.getScope());
+      dbgs() << "I: " << *I << " [" << Scope->getFilename()
+             << ":" << loc.getLine() << "]"
+             << "\n";
+    }
   }
+
+
+
 };
