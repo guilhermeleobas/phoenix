@@ -7,6 +7,10 @@ using namespace llvm;
 
 class Optimize : public FunctionPass{
 private:
+
+  unsigned threshold = 1;
+
+
   void move_marked_to_basic_block(llvm::SmallVector<Instruction*, 10> &marked, TerminatorInst *br);
   llvm::SmallVector<Instruction*, 10> mark_instructions_to_be_moved(StoreInst *init);
   void insert_if(const Geps &g);

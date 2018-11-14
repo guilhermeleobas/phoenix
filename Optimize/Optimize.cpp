@@ -73,7 +73,7 @@ llvm::SmallVector<Instruction*, 10> Optimize::mark_instructions_to_be_moved(Stor
     bool all_marked = std::all_of(begin(v->users()), end(v->users()), [&marked](Value *user){
       return find(marked, user) != marked.end();
     });
-
+    
     if (!all_marked)
       continue;
 
@@ -82,8 +82,12 @@ llvm::SmallVector<Instruction*, 10> Optimize::mark_instructions_to_be_moved(Stor
 
     if (User *u = dyn_cast<User>(v)){
       for (Value *op : u->operands()){
-        if (Instruction *inst = dyn_cast<Instruction>(op))
+        if (Instruction *inst = dyn_cast<Instruction>(op)){
+          // restrict ourselves to instructions on the same basic block
+          if (init->getParent() != inst->getParent())
+            continue;
           q.push(inst);
+        }
       }
     }
   }
@@ -100,7 +104,7 @@ void Optimize::move_marked_to_basic_block(llvm::SmallVector<Instruction*, 10> &m
 void Optimize::insert_if(const Geps &g) {
 
   Value *v = g.get_v();
-  // DEBUG(dbgs() << "v: " << *g.get_v() << "\n");
+  DEBUG(dbgs() << "v: " << *g.get_v() << "\n");
   Instruction *I = g.get_instruction();
   StoreInst *store = g.get_store_inst();
   IRBuilder<> Builder(store);
@@ -120,14 +124,11 @@ void Optimize::insert_if(const Geps &g) {
   llvm::SmallVector<Instruction*, 10> marked = mark_instructions_to_be_moved(store);
 
   for_each(marked, [](Instruction *inst){
-    DEBUG(dbgs() << "Marked: " << *inst << "\n");
+    DEBUG(dbgs() << " Marked: " << *inst << "\n");
   });
 
   move_marked_to_basic_block(marked, br);
 
-  
-  // DEBUG(dbgs() << "cmp: " << *cmp << "\n");
-  // DEBUG(dbgs() << "Branch: " << *br << "\n");
 }
 
 // This should check for cases where we can't insert an if. For instance,
@@ -137,16 +138,62 @@ bool Optimize::can_insert_if(Geps &g){
   if (Constant *c = dyn_cast<Constant>(g.get_v())){
     if (c != get_identity(g.get_instruction()))
       return false;
+
+    // I truly believe that instCombine previously spotted and removed any
+    // easy optimization involving identity, like: 
+    //  I: *p = *p + 0
+    //  I: *p = *p * 1
+    // I am writting the code below just for the peace of mind
+
+    // We already know here that c == identity for the given operation.
+    // Let's just compare if c is in the correct spot. For instance, we can't
+    // optimize the function below. 
+    //  I: *p = 0 - *p 
+
+    unsigned v_pos = g.get_v_pos();
+    Instruction *I = g.get_instruction();
+
+    switch (I->getOpcode()) {
+    case Instruction::Add:
+    case Instruction::FAdd:
+    case Instruction::Mul:
+    case Instruction::FMul:
+    case Instruction::Xor:  
+      // Commutativity. The pos of v doesn't matter!
+      //  *p + v = v + *p
+      //  *p * v = v * *p
+      return true;
+    case Instruction::Sub:
+    case Instruction::FSub:
+      // true only if v == SECOND:
+      //  *p - v != v - *p
+      return (v_pos == SECOND) ? true : false;
+    // case Instruction::UDiv:
+    // case Instruction::SDiv:
+    // case Instruction::Shl:
+    // case Instruction::LShr:
+    // case Instruction::AShr:
+    // case Instruction::And:
+    // case Instruction::Or:
+    default:
+      std::string str = "Error (can_insert_if): ";
+      llvm::raw_string_ostream rso(str);
+      I->print(rso);
+      llvm_unreachable(str.c_str());
+    }
   }
 
   return true;
 }
 
 // This should implement a cost model
-// Ideas: Use something alongside loop depth
+// Right now we only insert the `if` if the depth is >= threshold(1)
+// TO-DO: Use a more sophisticated solution
 bool Optimize::worth_insert_if(Geps &g){
+  if (g.get_loop_depth() >= threshold)
+    return true;
 
-  return true;
+  return false;
 }
 
 bool Optimize::runOnFunction(Function &F) {

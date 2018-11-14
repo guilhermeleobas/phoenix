@@ -46,6 +46,7 @@ public:
   GetElementPtrInst *get_op_gep() const { return op_gep; }
   StoreInst *get_store_inst() const { return store; }
   unsigned get_operand_pos() const { return operand_pos; }
+  unsigned get_v_pos() const { return operand_pos == FIRST ? SECOND : FIRST; }
   Value *get_v() const { return v; }
   Instruction *get_v_as_inst() const { return dyn_cast<Instruction>(v); }
   Value *get_p_before() const { return p_before; }
