@@ -60,7 +60,8 @@ Optional<StoreInst *> Identify::can_reach_store(Instruction *I) {
 
   for (Value *op : I->users()) {
     if (StoreInst *si = dyn_cast<StoreInst>(op)) {
-      return si;
+      if (I->getParent() == si->getParent()) // The store should be in the same basic block
+        return si;
     }
   }
 
@@ -134,61 +135,62 @@ Optional<GetElementPtrInst *> Identify::check_op(LoadInst *li,
 
 // Iterate backwards to see if v was produced by a load
 // Only iterate on instructions on the same basic block
-std::vector<LoadInst *> Identify::find_load_inst(Instruction *I, Value *v) {
-  assert(isa<Instruction>(v));
+// std::vector<LoadInst *> Identify::find_load_inst(Instruction *I, Value *v) {
+//   assert(isa<Instruction>(v));
 
-  Instruction *target = dyn_cast<Instruction>(v);
+//   Instruction *target = dyn_cast<Instruction>(v);
 
-  if (I->getParent() != target->getParent()) {
-    return std::vector<LoadInst *>();
-  }
+//   if (I->getParent() != target->getParent()) {
+//     return std::vector<LoadInst *>();
+//   }
 
-  stack<Instruction *> s;
-  s.push(target);
+//   stack<Instruction *> s;
+//   s.push(target);
 
-  set<Instruction *> visited;
-  std::vector<LoadInst *> vec;
+//   set<Instruction *> visited;
+//   std::vector<LoadInst *> vec;
 
-  while (!s.empty()) {
-    Instruction *aux = s.top();
-    s.pop();
+//   while (!s.empty()) {
+//     Instruction *aux = s.top();
+//     s.pop();
 
-    if (LoadInst *load = dyn_cast<LoadInst>(aux)) {
-      vec.push_back(load);
-      continue;
-    }
+//     if (LoadInst *load = dyn_cast<LoadInst>(aux)) {
+//       vec.push_back(load);
+//       continue;
+//     }
 
-    for (unsigned i = 0; i < aux->getNumOperands(); ++i) {
-      if (Instruction *other = dyn_cast<Instruction>(aux->getOperand(i))) {
-        // Check if we are still in the same basic block
-        // and if we already visited `other`
-        if (other->getParent() != I->getParent() ||
-            visited.find(other) != visited.end())
-          continue;
+//     for (unsigned i = 0; i < aux->getNumOperands(); ++i) {
+//       if (Instruction *other = dyn_cast<Instruction>(aux->getOperand(i))) {
+//         // Check if we are still in the same basic block
+//         // and if we already visited `other`
+//         if (other->getParent() != I->getParent() ||
+//             visited.find(other) != visited.end())
+//           continue;
 
-        visited.insert(other);
+//         visited.insert(other);
 
-        s.push(other);
-      }
-    }
-  }
+//         s.push(other);
+//       }
+//     }
+//   }
 
-  return vec;
-}
+//   return vec;
+// }
 
 Optional<Geps> Identify::good_to_go(Instruction *I) {
-  // Given I as
-  //   I: %dest = `op` %a, %b
+  // Given I as:
+  //  I: %p_new = op %p_old, %v
   //
-  // There are 5 conditions that should be met:
+  // There are 5 conditions that should be met in order for a match to happen:
   //  1. `I` should be an arithmetic instruction of interest
   //
-  //  2. %dest MUST be used in a store:
-  //    store %dest, %ptr
+  //  2. %p_new MUST be used in a store:
+  //    store %p_new, %ptr
   //
-  //  3. either %a or %b must be loaded from the same %ptr
-  //    ptr = getElementPtr %base, %offset
-  //  Both %base and %offset should be the same
+  //  3. %v MUST be a LoadInst. Otherwise, one can have a case like the one above:
+  //      *C = *C x alpha + *B x beta
+  //    Even if *B x beta is 0, we can't optimize this instruction because *C x alpha already
+  //    changes the value of *C. (Ref. symm.c)
   //
   //  4. Both instructions must be on the same basic block!
   //      while (x > 0) {
@@ -210,36 +212,52 @@ Optional<Geps> Identify::good_to_go(Instruction *I) {
   //  Idea: Use RangeAnalysis here to check the offset? Maybe!?
   //  If we use RangeAnalysis, we can drop check 4 when the base pointers are
   //  the same
+  //
+  //  Tip: -early-cse makes the analysis easier because it remove redundant computations
 
   // Check 1
   if (!is_arith_inst_of_interest(I))
     return None;
 
   // Check 2
-  Optional<StoreInst *> si = can_reach_store(I);
-  if (!si)
+  Optional<StoreInst *> store = can_reach_store(I);
+  if (!store)
     return None;
 
   // To-Do: Check for other types? I know that %ptr can be a global variable
-  if (!isa<GetElementPtrInst>((*si)->getPointerOperand()))
+  if (!isa<GetElementPtrInst>((*store)->getPointerOperand()))
     return None;
 
   GetElementPtrInst *dest_gep =
-      dyn_cast<GetElementPtrInst>((*si)->getPointerOperand());
+      dyn_cast<GetElementPtrInst>((*store)->getPointerOperand());
 
-  // Check 3:
   // Perform a check on both operands
   for (unsigned num_op = 0; num_op < 2; ++num_op) {
-    if (!isa<Instruction>(I->getOperand(num_op)))
+
+    // Check 3
+    if (!isa<LoadInst>(I->getOperand(num_op)))
       continue;
 
-    std::vector<LoadInst *> loads = find_load_inst(I, I->getOperand(num_op));
+    LoadInst *load = dyn_cast<LoadInst>(I->getOperand(num_op));
 
-    for (LoadInst *load : loads) {
-      if (Optional<GetElementPtrInst *> op_gep = check_op(load, dest_gep)) {
-        return Geps(dest_gep, *op_gep, *si, I, num_op + 1);
-      }
+    // Check 4: Same basic block
+    if (load->getParent() != I->getParent())
+      continue;
+
+    // Check 5:
+    GetElementPtrInst *dest_gep =
+        dyn_cast<GetElementPtrInst>((*store)->getPointerOperand());
+    if (Optional<GetElementPtrInst *> op_gep = check_op(load, dest_gep)) {
+      return Geps(dest_gep, *op_gep, *store, I, num_op + 1);
     }
+
+    // std::vector<LoadInst *> loads = find_load_inst(I, I->getOperand(num_op));
+
+    // for (LoadInst *load : loads) {
+    //   if (Optional<GetElementPtrInst *> op_gep = check_op(load, dest_gep)) {
+    //     return Geps(dest_gep, *op_gep, *si, I, num_op + 1);
+    //   }
+    // }
   }
 
   return None;

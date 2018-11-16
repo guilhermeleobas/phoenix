@@ -53,39 +53,45 @@ Value *Optimize::get_identity(const Instruction *I) {
   }
 }
 
-llvm::SmallVector<Instruction*, 10> Optimize::mark_instructions_to_be_moved(StoreInst *init){
-  std::queue<Instruction*> q;
-  llvm::SmallVector<Instruction*, 10> marked;
+llvm::SmallVector<Instruction *, 10>
+Optimize::mark_instructions_to_be_moved(StoreInst *init) {
+  std::queue<Instruction *> q;
+  llvm::SmallVector<Instruction *, 10> marked;
 
-  for(Value *v : init->operands()){
-    if (Instruction *i = dyn_cast<Instruction>(v)){
+  for (Value *v : init->operands()) {
+    if (Instruction *i = dyn_cast<Instruction>(v)) {
       q.push(i);
     }
   }
 
   marked.push_back(init);
 
-  while (!q.empty()){
+  while (!q.empty()) {
     Instruction *v = q.front();
     q.pop();
-    
+
     // Check if *v is only used in instructions already marked
-    bool all_marked = std::all_of(begin(v->users()), end(v->users()), [&marked](Value *user){
-      return find(marked, user) != marked.end();
-    });
-    
-    if (!all_marked)
+    bool all_marked =
+        std::all_of(begin(v->users()), end(v->users()), [&marked](Value *user) {
+          return find(marked, user) != marked.end();
+        });
+
+    if (!all_marked){
+      DEBUG(dbgs() << "-> Ignoring: " << *v << "\n");
       continue;
+    }
 
     // Insert v in the list of marked values and its operands in the queue
     marked.push_back(v);
 
-    if (User *u = dyn_cast<User>(v)){
-      for (Value *op : u->operands()){
-        if (Instruction *inst = dyn_cast<Instruction>(op)){
+    if (User *u = dyn_cast<User>(v)) {
+      for (Value *op : u->operands()) {
+        if (Instruction *inst = dyn_cast<Instruction>(op)) {
           // restrict ourselves to instructions on the same basic block
-          if (init->getParent() != inst->getParent())
+          if (v->getParent() != inst->getParent()){
+            DEBUG(dbgs() << "-> not in the same BB: " << *inst << "\n");
             continue;
+          }
           q.push(inst);
         }
       }
@@ -95,8 +101,9 @@ llvm::SmallVector<Instruction*, 10> Optimize::mark_instructions_to_be_moved(Stor
   return marked;
 }
 
-void Optimize::move_marked_to_basic_block(llvm::SmallVector<Instruction*, 10> &marked, TerminatorInst *br){
-  for (Instruction *inst : reverse(marked)){
+void Optimize::move_marked_to_basic_block(
+    llvm::SmallVector<Instruction *, 10> &marked, TerminatorInst *br) {
+  for (Instruction *inst : reverse(marked)) {
     inst->moveBefore(br);
   }
 }
@@ -113,7 +120,7 @@ void Optimize::insert_if(const Geps &g) {
   Value *cmp;
 
   if (v->getType()->isFloatingPointTy()) {
-    cmp = Builder.CreateFCmpUNE(v, get_identity(I));
+    cmp = Builder.CreateFCmpONE(v, get_identity(I));
   } else {
     cmp = Builder.CreateICmpNE(v, get_identity(I));
   }
@@ -121,34 +128,34 @@ void Optimize::insert_if(const Geps &g) {
   TerminatorInst *br = llvm::SplitBlockAndInsertIfThen(
       cmp, dyn_cast<Instruction>(cmp)->getNextNode(), false);
 
-  llvm::SmallVector<Instruction*, 10> marked = mark_instructions_to_be_moved(store);
+  llvm::SmallVector<Instruction *, 10> marked =
+    mark_instructions_to_be_moved(store);
 
-  for_each(marked, [](Instruction *inst){
+  for_each(marked, [](Instruction *inst) {
     DEBUG(dbgs() << " Marked: " << *inst << "\n");
   });
 
   move_marked_to_basic_block(marked, br);
-
 }
 
 // This should check for cases where we can't insert an if. For instance,
 //   I: *p = *p + 1
-bool Optimize::can_insert_if(Geps &g){
+bool Optimize::can_insert_if(Geps &g) {
   // v is the operand that is not *p
-  if (Constant *c = dyn_cast<Constant>(g.get_v())){
+  if (Constant *c = dyn_cast<Constant>(g.get_v())) {
     if (c != get_identity(g.get_instruction()))
       return false;
 
     // I truly believe that instCombine previously spotted and removed any
-    // easy optimization involving identity, like: 
+    // easy optimization involving identity, like:
     //  I: *p = *p + 0
     //  I: *p = *p * 1
     // I am writting the code below just for the peace of mind
 
     // We already know here that c == identity for the given operation.
     // Let's just compare if c is in the correct spot. For instance, we can't
-    // optimize the function below. 
-    //  I: *p = 0 - *p 
+    // optimize the instruction below.
+    //  I: *p = 0 - *p
 
     unsigned v_pos = g.get_v_pos();
     Instruction *I = g.get_instruction();
@@ -158,7 +165,7 @@ bool Optimize::can_insert_if(Geps &g){
     case Instruction::FAdd:
     case Instruction::Mul:
     case Instruction::FMul:
-    case Instruction::Xor:  
+    case Instruction::Xor:
       // Commutativity. The pos of v doesn't matter!
       //  *p + v = v + *p
       //  *p * v = v * *p
@@ -189,11 +196,24 @@ bool Optimize::can_insert_if(Geps &g){
 // This should implement a cost model
 // Right now we only insert the `if` if the depth is >= threshold(1)
 // TO-DO: Use a more sophisticated solution
-bool Optimize::worth_insert_if(Geps &g){
+bool Optimize::worth_insert_if(Geps &g) {
   if (g.get_loop_depth() >= threshold)
     return true;
 
   return false;
+}
+
+void print_gep(Geps &g) {
+  Instruction *I = g.get_instruction();
+  DEBUG(dbgs() << "I: " << *I << "\n");
+
+  const DebugLoc &loc = I->getDebugLoc();
+  if (loc) {
+    auto *Scope = cast<DIScope>(loc.getScope());
+    DEBUG(dbgs() << " - File: " << Scope->getFilename() << ":" << loc.getLine() << "\n");
+  }
+  DEBUG(dbgs() << " - Loop Depth:" << g.get_loop_depth() << "\n");
+  DEBUG(dbgs() << " - v : " << *g.get_v() << "\n");
 }
 
 bool Optimize::runOnFunction(Function &F) {
@@ -209,15 +229,18 @@ bool Optimize::runOnFunction(Function &F) {
   for (auto &g : gs) {
     Instruction *I = g.get_instruction();
 
-    DEBUG(dbgs() << "I: " << *I << " depth: " << g.get_loop_depth() << "\n");
+    print_gep(g);
 
     // sanity check for vector instructions
     if (I->getOperand(0)->getType()->isVectorTy() ||
         I->getOperand(1)->getType()->isVectorTy())
       assert(0 && "Vector type");
 
-    if (can_insert_if(g) && worth_insert_if(g))
+    if (can_insert_if(g) && worth_insert_if(g)){
       insert_if(g);
+    }
+
+    DEBUG(dbgs() << "\n");
   }
 
   return false;
@@ -230,4 +253,4 @@ void Optimize::getAnalysisUsage(AnalysisUsage &AU) const {
 }
 
 char Optimize::ID = 0;
-static RegisterPass<Optimize> X("Optimize", "Optimize pattern a = a OP b");
+static RegisterPass<Optimize> X("Optimize", "Optimize pattern a = a OP b", false, false);
