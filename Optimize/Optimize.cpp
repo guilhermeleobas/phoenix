@@ -54,17 +54,17 @@ Value *Optimize::get_identity(const Instruction *I) {
 }
 
 llvm::SmallVector<Instruction *, 10>
-Optimize::mark_instructions_to_be_moved(StoreInst *init) {
+Optimize::mark_instructions_to_be_moved(StoreInst *store, BasicBlock *BB) {
   std::queue<Instruction *> q;
   llvm::SmallVector<Instruction *, 10> marked;
 
-  for (Value *v : init->operands()) {
+  for (Value *v : store->operands()) {
     if (Instruction *i = dyn_cast<Instruction>(v)) {
       q.push(i);
     }
   }
 
-  marked.push_back(init);
+  marked.push_back(store);
 
   while (!q.empty()) {
     Instruction *v = q.front();
@@ -92,11 +92,29 @@ Optimize::mark_instructions_to_be_moved(StoreInst *init) {
             DEBUG(dbgs() << "-> not in the same BB: " << *inst << "\n");
             continue;
           }
+
+          if (isa<PHINode>(inst))
+            continue;
+
           q.push(inst);
         }
       }
     }
   }
+
+  std::map<Value*, unsigned> mapa;
+
+  mapa[store] = 0x3f3f3f3f;
+
+  for (Instruction &inst : *BB){
+    mapa[&inst] = mapa.size();
+  }
+
+  // sort the instructions
+  std::sort(marked.begin(), marked.end(), [&mapa](Value *a, Value *b){
+    assert(mapa.find(a) != mapa.end() && mapa.find(b) != mapa.end());
+    return mapa[a] > mapa[b];
+  });
 
   return marked;
 }
@@ -111,7 +129,6 @@ void Optimize::move_marked_to_basic_block(
 void Optimize::insert_if(const Geps &g) {
 
   Value *v = g.get_v();
-  DEBUG(dbgs() << "v: " << *g.get_v() << "\n");
   Instruction *I = g.get_instruction();
   StoreInst *store = g.get_store_inst();
   IRBuilder<> Builder(store);
@@ -129,7 +146,7 @@ void Optimize::insert_if(const Geps &g) {
       cmp, dyn_cast<Instruction>(cmp)->getNextNode(), false);
 
   llvm::SmallVector<Instruction *, 10> marked =
-    mark_instructions_to_be_moved(store);
+    mark_instructions_to_be_moved(store, dyn_cast<Instruction>(cmp)->getParent());
 
   for_each(marked, [](Instruction *inst) {
     DEBUG(dbgs() << " Marked: " << *inst << "\n");

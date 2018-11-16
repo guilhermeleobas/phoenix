@@ -12,7 +12,7 @@ private:
 
 
   void move_marked_to_basic_block(llvm::SmallVector<Instruction*, 10> &marked, TerminatorInst *br);
-  llvm::SmallVector<Instruction*, 10> mark_instructions_to_be_moved(StoreInst *init);
+  llvm::SmallVector<Instruction*, 10> mark_instructions_to_be_moved(StoreInst *init, BasicBlock *BB);
   void insert_if(const Geps &g);
 
   bool can_insert_if(Geps &g);
