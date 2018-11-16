@@ -53,8 +53,18 @@ Value *Optimize::get_identity(const Instruction *I) {
   }
 }
 
+std::map<Instruction*, unsigned> Optimize::map_values(BasicBlock *BB){
+  std::map<Instruction*, unsigned> mapa;
+  for (BasicBlock::iterator i = BB->begin(), e = BB->end(); i != e; ++i){
+    mapa[&*i] = mapa.size();
+    // DEBUG(dbgs() << mapa[&*i] <<  " -> " << *i << "\n");
+  }
+
+  return mapa;
+}
+
 llvm::SmallVector<Instruction *, 10>
-Optimize::mark_instructions_to_be_moved(StoreInst *store, BasicBlock *BB) {
+Optimize::mark_instructions_to_be_moved(StoreInst *store, std::map<Instruction*, unsigned> &mapa) {
   std::queue<Instruction *> q;
   llvm::SmallVector<Instruction *, 10> marked;
 
@@ -102,24 +112,13 @@ Optimize::mark_instructions_to_be_moved(StoreInst *store, BasicBlock *BB) {
     }
   }
 
-  std::map<Instruction*, unsigned> mapa;
-
-  mapa[store] = 0x3f3f3f3f;
-
-  
-  for (BasicBlock::iterator i = BB->begin(), e = BB->end(); i != e; ++i){
-    mapa[&*i] = mapa.size();
-    DEBUG(dbgs() << mapa[&*i] <<  " -> " << *i << "\n");
-  }
-  errs() << "size: " << mapa.size() << "\n";
-
-  // sort the instructions
-  std::sort(marked.begin(), marked.end(), [&mapa](Instruction *a, Instruction *b){
-    errs() << "a: " << *a << "\n";
-    assert(mapa.find(a) != mapa.end() && "Error *a");
-    assert(mapa.find(b) != mapa.end() && "Error *b");
-    return mapa[a] > mapa[b];
-  });
+  // // sort the instructions
+  // std::sort(marked.begin(), marked.end(), [&mapa](Instruction *a, Instruction *b){
+  //   errs() << "a: " << *a << "\n";
+  //   assert(mapa.find(a) != mapa.end() && "Error *a");
+  //   assert(mapa.find(b) != mapa.end() && "Error *b");
+  //   return mapa[a] > mapa[b];
+  // });
 
   return marked;
 }
@@ -138,6 +137,8 @@ void Optimize::insert_if(const Geps &g) {
   StoreInst *store = g.get_store_inst();
   IRBuilder<> Builder(store);
 
+  std::map<Instruction*, unsigned> mapa = map_values(store->getParent());
+
   Value *idnt;
   Value *cmp;
 
@@ -151,7 +152,7 @@ void Optimize::insert_if(const Geps &g) {
       cmp, dyn_cast<Instruction>(cmp)->getNextNode(), false);
 
   llvm::SmallVector<Instruction *, 10> marked =
-    mark_instructions_to_be_moved(store, dyn_cast<Instruction>(cmp)->getParent());
+    mark_instructions_to_be_moved(store, mapa);
 
   for_each(marked, [](Instruction *inst) {
     DEBUG(dbgs() << " Marked: " << *inst << "\n");

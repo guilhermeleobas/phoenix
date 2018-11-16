@@ -10,9 +10,12 @@ private:
 
   unsigned threshold = 1;
 
+  std::map<Instruction*, unsigned> map_values(BasicBlock *BB);
 
   void move_marked_to_basic_block(llvm::SmallVector<Instruction*, 10> &marked, TerminatorInst *br);
-  llvm::SmallVector<Instruction*, 10> mark_instructions_to_be_moved(StoreInst *init, BasicBlock *BB);
+  llvm::SmallVector<Instruction *, 10>
+  mark_instructions_to_be_moved(StoreInst *init,
+                                std::map<Instruction *, unsigned> &mapa);
   void insert_if(const Geps &g);
 
   bool can_insert_if(Geps &g);
