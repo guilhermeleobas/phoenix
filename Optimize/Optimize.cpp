@@ -102,17 +102,22 @@ Optimize::mark_instructions_to_be_moved(StoreInst *store, BasicBlock *BB) {
     }
   }
 
-  std::map<Value*, unsigned> mapa;
+  std::map<Instruction*, unsigned> mapa;
 
   mapa[store] = 0x3f3f3f3f;
 
-  for (Instruction &inst : *BB){
-    mapa[&inst] = mapa.size();
+  
+  for (BasicBlock::iterator i = BB->begin(), e = BB->end(); i != e; ++i){
+    mapa[&*i] = mapa.size();
+    DEBUG(dbgs() << mapa[&*i] <<  " -> " << *i << "\n");
   }
+  errs() << "size: " << mapa.size() << "\n";
 
   // sort the instructions
-  std::sort(marked.begin(), marked.end(), [&mapa](Value *a, Value *b){
-    assert(mapa.find(a) != mapa.end() && mapa.find(b) != mapa.end());
+  std::sort(marked.begin(), marked.end(), [&mapa](Instruction *a, Instruction *b){
+    errs() << "a: " << *a << "\n";
+    assert(mapa.find(a) != mapa.end() && "Error *a");
+    assert(mapa.find(b) != mapa.end() && "Error *b");
     return mapa[a] > mapa[b];
   });
 
