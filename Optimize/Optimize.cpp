@@ -53,18 +53,8 @@ Value *Optimize::get_identity(const Instruction *I) {
   }
 }
 
-std::map<Instruction*, unsigned> Optimize::map_values(BasicBlock *BB){
-  std::map<Instruction*, unsigned> mapa;
-  for (BasicBlock::iterator i = BB->begin(), e = BB->end(); i != e; ++i){
-    mapa[&*i] = mapa.size();
-    // DEBUG(dbgs() << mapa[&*i] <<  " -> " << *i << "\n");
-  }
-
-  return mapa;
-}
-
 llvm::SmallVector<Instruction *, 10>
-Optimize::mark_instructions_to_be_moved(StoreInst *store, std::map<Instruction*, unsigned> &mapa) {
+Optimize::mark_instructions_to_be_moved(StoreInst *store) {
   std::queue<Instruction *> q;
   llvm::SmallVector<Instruction *, 10> marked;
 
@@ -112,21 +102,91 @@ Optimize::mark_instructions_to_be_moved(StoreInst *store, std::map<Instruction*,
     }
   }
 
-  // // sort the instructions
-  // std::sort(marked.begin(), marked.end(), [&mapa](Instruction *a, Instruction *b){
-  //   errs() << "a: " << *a << "\n";
-  //   assert(mapa.find(a) != mapa.end() && "Error *a");
-  //   assert(mapa.find(b) != mapa.end() && "Error *b");
-  //   return mapa[a] > mapa[b];
-  // });
-
   return marked;
 }
 
 void Optimize::move_marked_to_basic_block(
-    llvm::SmallVector<Instruction *, 10> &marked, TerminatorInst *br) {
+    llvm::SmallVector<Instruction *, 10> &marked, Instruction *br) {
   for (Instruction *inst : reverse(marked)) {
     inst->moveBefore(br);
+  }
+}
+
+void Optimize::move_from_prev_to_then(BasicBlock *BBPrev, BasicBlock *BBThen){
+  llvm::SmallVector<Instruction*, 10> list;
+
+  for (BasicBlock::reverse_iterator b = BBPrev->rbegin(), e = BBPrev->rend(); b != e; ++b){
+    Instruction *I = &*b;
+
+    if (isa<PHINode>(I) || isa<BranchInst>(I))
+      continue;
+
+    if (begin(I->users()) == end(I->users()))
+      continue;
+
+    // Move I from BBPrev to BBThen iff all users of I are in BBThen
+    //
+    // Def 1.
+    //  Program P is in SSA form. Therefore, I dominates all its users
+    // Def 2. 
+    //  We are iterating from the end of BBPrev to the beginning. Thus, this gives us the guarantee
+    //  that all users of I living in the same BB were previously visited.
+
+    bool can_move_I = std::all_of(begin(I->users()), end(I->users()), [&BBThen](User *U){
+      BasicBlock *parent = dyn_cast<Instruction>(U)->getParent();
+      return (parent == BBThen);
+    });
+
+    if (can_move_I){
+      DEBUG(dbgs() << "[BBPrev -> BBThen] " << *I << "\n");
+      --b;
+      I->moveBefore(BBThen->getFirstNonPHI());
+    }
+  }
+}
+
+void Optimize::move_from_prev_to_end(BasicBlock *BBPrev, BasicBlock *BBThen, BasicBlock *BBEnd){
+  llvm::SmallVector<Instruction*, 10> marked;
+
+  for (BasicBlock::reverse_iterator b = BBPrev->rbegin(), e = BBPrev->rend(); b != e; ++b){
+    Instruction *I = &*b;
+
+    if (isa<PHINode>(I) || isa<BranchInst>(I))
+      continue;
+
+    if (begin(I->users()) == end(I->users()))
+      continue;
+
+    // Move I from BBPrev to BBEnd iff all users of I are in BBEnd. 
+    // 
+    // Def 1. 
+    //  The program is in SSA form
+    // Def 2.
+    //  We are iterating from the end of BBPrev to the beginning. 
+    // 
+    // Theorem: 
+    //  Given an I that **has only users on BBend**, moving it from BBPrev -> BBEnd doesn't
+    //  change the semanthics of the program P.
+    // 
+    // Proof:
+    //  Let's assume that moving I from BBPrev to BBEnd changes the semantics of P. If it changes,
+    //  there an instruction J that depends on I (is a user of I) and will be executed before I. There
+    //  are two cases that can happen:
+    //    J is in BBPrev: Because the program is in SSA form, I must dominate J. Therefore, to move I,
+    //      we had to move J before to BBEnd. 
+    //    J is in BBThen: Invalid. We don't move I if there is a user of it outside BBPrev.
+    //
+
+    bool can_move_I = std::all_of(begin(I->users()), end(I->users()), [&BBPrev, &BBThen, &BBEnd](User *U){
+      BasicBlock *BB = dyn_cast<Instruction>(U)->getParent();
+      return (BB != BBPrev) && (BB != BBThen);
+    });
+
+    if (can_move_I){
+      DEBUG(dbgs() << "[BBPrev -> BBEnd]" << *I << "\n");
+      --b;
+      I->moveBefore(BBEnd->getFirstNonPHI());
+    }
   }
 }
 
@@ -136,8 +196,6 @@ void Optimize::insert_if(const Geps &g) {
   Instruction *I = g.get_instruction();
   StoreInst *store = g.get_store_inst();
   IRBuilder<> Builder(store);
-
-  std::map<Instruction*, unsigned> mapa = map_values(store->getParent());
 
   Value *idnt;
   Value *cmp;
@@ -151,14 +209,23 @@ void Optimize::insert_if(const Geps &g) {
   TerminatorInst *br = llvm::SplitBlockAndInsertIfThen(
       cmp, dyn_cast<Instruction>(cmp)->getNextNode(), false);
 
-  llvm::SmallVector<Instruction *, 10> marked =
-    mark_instructions_to_be_moved(store, mapa);
+  BasicBlock *BBThen = br->getParent();
+  BasicBlock *BBPrev = BBThen->getSinglePredecessor();
+  BasicBlock *BBEnd = BBThen->getSingleSuccessor();
 
-  for_each(marked, [](Instruction *inst) {
-    DEBUG(dbgs() << " Marked: " << *inst << "\n");
-  });
+  store->moveBefore(br);
 
-  move_marked_to_basic_block(marked, br);
+  // llvm::SmallVector<Instruction *, 10> marked =
+  //   mark_instructions_to_be_moved(store);
+
+  // for_each(marked, [](Instruction *inst) {
+  //   DEBUG(dbgs() << " Marked: " << *inst << "\n");
+  // });
+
+  // move_marked_to_basic_block(marked, br);
+
+  move_from_prev_to_then(BBPrev, BBThen);
+  move_from_prev_to_end(BBPrev, BBThen, BBEnd);
 }
 
 // This should check for cases where we can't insert an if. For instance,
@@ -223,6 +290,7 @@ bool Optimize::worth_insert_if(Geps &g) {
   if (g.get_loop_depth() >= threshold)
     return true;
 
+  DEBUG(dbgs() << "skipping: threshold " << g.get_loop_depth() << " is not greater than " << threshold << "\n");
   return false;
 }
 

@@ -1,0 +1,15 @@
+﻿---
+BasedOnStyle: Chromium
+ColumnLimit: '100'
+IndentWidth: '2'
+Language: Cpp
+PointerAlignment: Right
+SpaceBeforeAssignmentOperators: 'true'
+SpaceBeforeParens: ControlStatements
+SpacesInAngles: 'false'
+SpacesInParentheses: 'false'
+Standard: Cpp11
+TabWidth: '2'
+UseTab: Never
+
+...
