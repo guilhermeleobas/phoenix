@@ -36,13 +36,13 @@ bool Identify::is_arith_inst_of_interest(Instruction *I) {
   case Instruction::Add:
   case Instruction::Sub:
   case Instruction::Mul:
-  // case Instruction::UDiv:
-  // case Instruction::SDiv:
-  // case Instruction::Shl:
-  // case Instruction::LShr:
-  // case Instruction::AShr:
-  // case Instruction::And:
-  // case Instruction::Or:
+  case Instruction::UDiv:
+  case Instruction::SDiv:
+  case Instruction::Shl:
+  case Instruction::LShr:
+  case Instruction::AShr:
+  case Instruction::And:
+  case Instruction::Or:
   case Instruction::Xor:
   case Instruction::FAdd:
   case Instruction::FSub:

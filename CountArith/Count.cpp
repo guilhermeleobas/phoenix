@@ -30,29 +30,19 @@ using std::stack;
 
 #define DEBUG_TYPE "Count"
 
-void Count::print_instructions(Module &M) {
-  for (auto &F : M) {
-    errs() << F.getName() << "\n";
-    for (auto &BB : F) {
-      for (auto &I : BB) {
-        errs() << '\t' << I << "\n";
-      }
-    }
-  }
-}
+void Count::dump() {
 
-void Count::dump(const std::string &name,
-                 const map<Instruction *, unsigned> &mapa) {
-  if (mapa.size() == 0) {
-    printf("[%s]: 0\n\n", name.c_str());
-    return;
+  std::vector<Instruction*> vec;
+  for (auto &it : mapa){
+    vec.push_back (it.first);
   }
 
-  printf("[%s]: %lu\n", name.c_str(), mapa.size());
+  sort(begin(vec), end(vec), [](const Instruction *a, const Instruction *b){
+    return a->getOpcode() > b->getOpcode();
+  });
 
-  for (auto &it : mapa) {
-    Instruction *I = it.first;
-    unsigned id = it.second;
+  for (Instruction *I : vec) {
+    unsigned id = mapa[I];
     const DebugLoc &loc = I->getDebugLoc();
 
     if (loc) {
@@ -68,38 +58,19 @@ void Count::dump(const std::string &name,
   // errs() << "\n";
 }
 
-unsigned Count::get_id(map<Instruction *, unsigned> &mapa, Instruction *I) {
-  if (mapa.find(I) == mapa.end()) {
-    mapa[I] = mapa.size();
-    // errs() << "Assigning " << mapa[I] << " to " << *I << "\n";
+unsigned Count::get_id(Instruction *I){
+  if (mapa.find(I) == mapa.end()){
+    assign_id(I);
   }
-
+  assert(mapa.find(I) != mapa.end());
   return mapa[I];
 }
 
-unsigned Count::get_id(Instruction *I) {
-
-  switch (I->getOpcode()) {
-  case Instruction::Add:
-    return get_id(add_map, I);
-  case Instruction::Sub:
-    return get_id(sub_map, I);
-  case Instruction::Mul:
-    return get_id(mul_map, I);
-  case Instruction::Xor:
-    return get_id(xor_map, I);
-  case Instruction::FAdd:
-    return get_id(fadd_map, I);
-  case Instruction::FSub:
-    return get_id(fsub_map, I);
-  case Instruction::FMul:
-    return get_id(fmul_map, I);
-  default:
-    assert(0);
-  }
+void Count::assign_id(Instruction *I){
+  assert(mapa.find(I) == mapa.end() && "Instructino already exists on map<Instruction*, unsigned>");
+  unsigned opcode = I->getOpcode();
+  mapa[I] = ++opcode_counter[opcode];;
 }
-
-void Count::assign_id(Instruction *I) { get_id(I); }
 
 void Count::track_int(Module &M, Instruction *I, Value *op1, Value *op2,
                       Geps &g) {
@@ -258,14 +229,6 @@ bool Count::runOnModule(Module &M) {
       }
     }
   }
-
-  // dump("fadd", fadd_map);
-  // dump("fsub", fsub_map);
-  // dump("fmul", fmul_map);
-  // dump("add", add_map);
-  // dump("sub", sub_map);
-  // dump("mul", mul_map);
-  // dump("xor", xor_map);
 
   return false;
 }

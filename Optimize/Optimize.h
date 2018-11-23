@@ -19,7 +19,7 @@ private:
   bool can_insert_if(Geps &g);
   bool worth_insert_if(Geps &g);
   
-  Value* get_identity(const Instruction *I);
+  Value* get_identity(Instruction *I);
 public:
   // Pass identifier, for LLVM's RTTI support:
   static char ID;

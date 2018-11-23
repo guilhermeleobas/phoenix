@@ -25,26 +25,32 @@
 
 #define DEBUG_TYPE "Optimize"
 
-Value *Optimize::get_identity(const Instruction *I) {
+Value *Optimize::get_identity(Instruction *I) {
   switch (I->getOpcode()) {
   case Instruction::Add:
   case Instruction::Sub:
   case Instruction::Xor:
+  //
+  case Instruction::Shl:
+  case Instruction::LShr:
+  case Instruction::AShr:
     return ConstantInt::get(I->getType(), 0);
+  //
   case Instruction::Mul:
+  case Instruction::UDiv:
+  case Instruction::SDiv:
     return ConstantInt::get(I->getType(), 1);
+  //
   case Instruction::FAdd:
   case Instruction::FSub:
     return ConstantFP::get(I->getType(), 0.0);
   case Instruction::FMul:
+  case Instruction::FDiv:
     return ConstantFP::get(I->getType(), 1.0);
-  // case Instruction::UDiv:
-  // case Instruction::SDiv:
-  // case Instruction::Shl:
-  // case Instruction::LShr:
-  // case Instruction::AShr:
-  // case Instruction::And:
-  // case Instruction::Or:
+
+  case Instruction::And:
+  case Instruction::Or:
+    return I;
   default:
     std::string str = "Instruction not supported: ";
     llvm::raw_string_ostream rso(str);

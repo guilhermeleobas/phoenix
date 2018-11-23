@@ -83,20 +83,14 @@ typedef struct {
   dynamic_execution *dyn;
 } arithmetic_inst;
 
-#define LENGTH 7
+#define LENGTH 14
 
 static arithmetic_inst data[LENGTH] = {
-    {"Add", 11, 0, 0, 0, NULL}, {"FAdd", 12, 0, 0, 0, NULL},
-    {"Sub", 13, 0, 0, 0, NULL}, {"FSub", 14, 0, 0, 0, NULL},
-    {"Mul", 15, 0, 0, 0, NULL}, {"FMul", 16, 0, 0, 0, NULL},
-    {"Xor", 28, 0, 0, 0, NULL},
-    // {"Shl", 23, 0, 0, 0, NULL},
-    // {"LShr", 24, 0, 0, 0, NULL},
-    // {"AShr", 25, 0, 0, 0, NULL},
-    // {"UDiv", 17, 0, 0, 0, NULL},
-    // {"SDiv", 18, 0, 0, 0, NULL},
-    // {"And", 26, 0, 0, 0, NULL},
-    // {"Or", 27, 0, 0, 0, NULL},
+    {"Add", 11, 0, 0, 0, NULL},  {"FAdd", 12, 0, 0, 0, NULL}, {"Sub", 13, 0, 0, 0, NULL},
+    {"FSub", 14, 0, 0, 0, NULL}, {"Mul", 15, 0, 0, 0, NULL},  {"FMul", 16, 0, 0, 0, NULL},
+    {"Xor", 28, 0, 0, 0, NULL},  {"Shl", 23, 0, 0, 0, NULL},  {"LShr", 24, 0, 0, 0, NULL},
+    {"AShr", 25, 0, 0, 0, NULL}, {"UDiv", 17, 0, 0, 0, NULL}, {"SDiv", 18, 0, 0, 0, NULL},
+    {"And", 26, 0, 0, 0, NULL},  {"Or", 27, 0, 0, 0, NULL},
 };
 
 int has_identity(unsigned opcode, void *a, void *b, unsigned op_pos);

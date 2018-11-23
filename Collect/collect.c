@@ -71,6 +71,15 @@ void dump_txt() {
 
 /////////////////////////
 
+char* TYPE(opcode){
+  for (unsigned i = 0 ; i < LENGTH ; i++){
+    if (data[i].opcode == opcode){
+      return data[i].name;
+    }
+  }
+  assert(0);
+}
+
 dynamic_execution* resize(dynamic_execution *dyn, int curr_size, int new_size) {
   dyn = (dynamic_execution *)realloc(dyn, sizeof(dynamic_execution) * new_size);
 
@@ -126,26 +135,27 @@ void record_id_individually(arithmetic_inst *ai, long long static_id, int has) {
 // We only consider that there is an identity iff the operand holding the identity
 // value is not the one indicated by op_pos. 
 //
+// This function returns which operand holds the identity
+//
 int has_identity(unsigned opcode, void* a, void* b, unsigned op_pos) {
   switch (opcode) {
   case 13: // Sub
     if (op_pos == FIRST && LL(b) == 0) // *p = *p - 0
-      return (LL(a) == 0 ? BOTH : ID_B);
+      return ID_B;
     return NONE;
   case 11: // Add
   case 28: // Xor
-    if (LL(a) == 0 && LL(b) == 0) // *p = 0 + 0 (same for xor)
-      return BOTH;
-    else if (op_pos == SECOND && LL(a) == 0) // *p = 0 + *p (...)
+    if (op_pos == SECOND && LL(a) == 0) // *p = 0 + *p (...)
       return ID_A;
     else if (LL(b) == 0) // *p = *p + 0 (...)
       return ID_B;
     else
       return NONE;
+
   case 15: // Mul
-    if (LL(a) == 1 && LL(b) == 1) // *p = 1 x 1
-      return BOTH;
-    else if (op_pos == SECOND && LL(a) == 1) // *p = 1 x *p
+  case 17: // UDiv
+  case 18: // SDiv
+    if (op_pos == SECOND && LL(a) == 1) // *p = 1 x *p
       return ID_A;
     else if (op_pos == FIRST && LL(b) == 1) // *p = *p x 1
       return ID_B;
@@ -157,9 +167,7 @@ int has_identity(unsigned opcode, void* a, void* b, unsigned op_pos) {
     return (LL(a) == LL(b)) ? BOTH : NONE;
 
   case 12: //Fadd
-    if (DB(a) == 0.00 && DB(b) == 0.00) // *p = 0.0 + 0.0
-      return BOTH;
-    else if (op_pos == SECOND && DB(a) == 0.0) // *p = 0.0 + *p
+    if (op_pos == SECOND && DB(a) == 0.0) // *p = 0.0 + *p
       return ID_A;
     else if (op_pos == FIRST && DB(b) == 0.0) // *p = *p + 0.0
       return ID_B;
@@ -167,13 +175,11 @@ int has_identity(unsigned opcode, void* a, void* b, unsigned op_pos) {
 
   case 14: // FSub
     if (op_pos == FIRST && DB(b) == 0.0) // *p = *p - 0.0
-      return (DB(a) == 0 ? BOTH : ID_B);
+      return ID_B;
     return NONE;
 
   case 16: // FMul
-    if (DB(a) == 1.0 && DB(b) == 1.0) // *p = 1.0 x 1.0
-      return BOTH;
-    else if (op_pos == SECOND && DB(a) == 1.0) // *p = 1.0 x *p
+    if (op_pos == SECOND && DB(a) == 1.0) // *p = 1.0 x *p
       return ID_A;
     else if (op_pos == FIRST && DB(b) == 1.0) // *p = *p x 1.0
       return ID_B;
@@ -183,11 +189,12 @@ int has_identity(unsigned opcode, void* a, void* b, unsigned op_pos) {
   case 23: // Shl
   case 24: // LShr
   case 25: // AShr
-  case 17: // UDiv
-  case 18: // SDiv
+    if (op_pos == FIRST && LL(a) == 0) // *p = *p << 0
+      return ID_B;
+    return NONE;
 
   default:
-    assert(0);
+    assertf(0, "Opcode: %s", TYPE(opcode));
   }
 }
 
@@ -199,18 +206,10 @@ unsigned get_index(unsigned opcode){
       index = i;
       break;
     }
-  assert(index >= 0 && index <= LENGTH);
+
+  assertf(index >= 0 && index <= LENGTH, "opcode = %s - index = %d", TYPE(opcode), index);
 
   return index;
-}
-
-char* TYPE(opcode){
-  for (unsigned i = 0 ; i < LENGTH ; i++){
-    if (data[i].opcode == opcode){
-      return data[i].name;
-    }
-  }
-  assert(0);
 }
 
 // Given an arithmeic instruction of the type:
