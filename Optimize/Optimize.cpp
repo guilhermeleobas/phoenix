@@ -25,7 +25,8 @@
 
 #define DEBUG_TYPE "Optimize"
 
-Value *Optimize::get_identity(Instruction *I) {
+Value *Optimize::get_identity(const Geps &g) {
+  Instruction *I = g.get_instruction();
   switch (I->getOpcode()) {
   case Instruction::Add:
   case Instruction::Sub:
@@ -50,7 +51,7 @@ Value *Optimize::get_identity(Instruction *I) {
 
   case Instruction::And:
   case Instruction::Or:
-    return I;
+    return g.get_p_before();
   default:
     std::string str = "Instruction not supported: ";
     llvm::raw_string_ostream rso(str);
@@ -207,9 +208,9 @@ void Optimize::insert_if(const Geps &g) {
   Value *cmp;
 
   if (v->getType()->isFloatingPointTy()) {
-    cmp = Builder.CreateFCmpONE(v, get_identity(I));
+    cmp = Builder.CreateFCmpONE(v, get_identity(g));
   } else {
-    cmp = Builder.CreateICmpNE(v, get_identity(I));
+    cmp = Builder.CreateICmpNE(v, get_identity(g));
   }
 
   TerminatorInst *br = llvm::SplitBlockAndInsertIfThen(
@@ -239,7 +240,7 @@ void Optimize::insert_if(const Geps &g) {
 bool Optimize::can_insert_if(Geps &g) {
   // v is the operand that is not *p
   if (Constant *c = dyn_cast<Constant>(g.get_v())) {
-    if (c != get_identity(g.get_instruction()))
+    if (c != get_identity(g))
       return false;
 
     // I truly believe that instCombine previously spotted and removed any
@@ -262,22 +263,24 @@ bool Optimize::can_insert_if(Geps &g) {
     case Instruction::Mul:
     case Instruction::FMul:
     case Instruction::Xor:
+    case Instruction::And:
+    case Instruction::Or:
       // Commutativity. The pos of v doesn't matter!
       //  *p + v = v + *p
       //  *p * v = v * *p
       return true;
     case Instruction::Sub:
     case Instruction::FSub:
+    case Instruction::Shl:
+    case Instruction::LShr:
+    case Instruction::AShr:
+    case Instruction::UDiv:
+    case Instruction::SDiv:
       // true only if v == SECOND:
       //  *p - v != v - *p
+      //  *p/v != v/*p
       return (v_pos == SECOND) ? true : false;
-    // case Instruction::UDiv:
-    // case Instruction::SDiv:
-    // case Instruction::Shl:
-    // case Instruction::LShr:
-    // case Instruction::AShr:
-    // case Instruction::And:
-    // case Instruction::Or:
+    
     default:
       std::string str = "Error (can_insert_if): ";
       llvm::raw_string_ostream rso(str);
@@ -296,11 +299,12 @@ bool Optimize::worth_insert_if(Geps &g) {
   if (g.get_loop_depth() >= threshold)
     return true;
 
-  DEBUG(dbgs() << "skipping: threshold " << g.get_loop_depth() << " is not greater than " << threshold << "\n");
+  DEBUG(dbgs() << "skipping: " << *g.get_instruction() << "\n"
+    << " threshold " << g.get_loop_depth() << " is not greater than " << threshold << "\n\n");
   return false;
 }
 
-void print_gep(Geps &g) {
+void print_gep(Function *F, Geps &g) {
   Instruction *I = g.get_instruction();
   DEBUG(dbgs() << "I: " << *I << "\n");
 
@@ -309,6 +313,8 @@ void print_gep(Geps &g) {
     auto *Scope = cast<DIScope>(loc.getScope());
     DEBUG(dbgs() << " - File: " << Scope->getFilename() << ":" << loc.getLine() << "\n");
   }
+
+  DEBUG(dbgs() << " - Function: " << F->getName() << "\n");
   DEBUG(dbgs() << " - Loop Depth:" << g.get_loop_depth() << "\n");
   DEBUG(dbgs() << " - v : " << *g.get_v() << "\n");
 }
@@ -322,22 +328,26 @@ bool Optimize::runOnFunction(Function &F) {
 
   llvm::SmallVector<Geps, 10> gs = Idn->get_instructions_of_interest();
 
+  int cnt = 0;
+
   // Let's give an id for each instruction of interest
   for (auto &g : gs) {
     Instruction *I = g.get_instruction();
-
-    print_gep(g);
 
     // sanity check for vector instructions
     if (I->getOperand(0)->getType()->isVectorTy() ||
         I->getOperand(1)->getType()->isVectorTy())
       assert(0 && "Vector type");
 
+    if (F.getName() != "Flush_Buffer")
+      continue;
+
     if (can_insert_if(g) && worth_insert_if(g)){
+      print_gep(&F, g);
       insert_if(g);
+      DEBUG(dbgs() << "\n");
     }
 
-    DEBUG(dbgs() << "\n");
   }
 
   return false;

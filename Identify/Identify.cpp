@@ -251,13 +251,6 @@ Optional<Geps> Identify::good_to_go(Instruction *I) {
       return Geps(dest_gep, *op_gep, *store, I, num_op + 1);
     }
 
-    // std::vector<LoadInst *> loads = find_load_inst(I, I->getOperand(num_op));
-
-    // for (LoadInst *load : loads) {
-    //   if (Optional<GetElementPtrInst *> op_gep = check_op(load, dest_gep)) {
-    //     return Geps(dest_gep, *op_gep, *si, I, num_op + 1);
-    //   }
-    // }
   }
 
   return None;
