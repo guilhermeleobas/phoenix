@@ -328,8 +328,6 @@ bool Optimize::runOnFunction(Function &F) {
 
   llvm::SmallVector<Geps, 10> gs = Idn->get_instructions_of_interest();
 
-  int cnt = 0;
-
   // Let's give an id for each instruction of interest
   for (auto &g : gs) {
     Instruction *I = g.get_instruction();
@@ -338,9 +336,6 @@ bool Optimize::runOnFunction(Function &F) {
     if (I->getOperand(0)->getType()->isVectorTy() ||
         I->getOperand(1)->getType()->isVectorTy())
       assert(0 && "Vector type");
-
-    if (F.getName() != "Flush_Buffer")
-      continue;
 
     if (can_insert_if(g) && worth_insert_if(g)){
       print_gep(&F, g);
