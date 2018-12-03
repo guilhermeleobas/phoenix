@@ -304,6 +304,30 @@ bool Optimize::worth_insert_if(Geps &g) {
   return false;
 }
 
+bool Optimize::filter_instructions(Geps &g){
+  Instruction *I = g.get_instruction();
+  
+  switch(I->getOpcode()){
+    case Instruction::Add:
+    case Instruction::FAdd:
+    case Instruction::Mul:
+    case Instruction::FMul:
+    case Instruction::Xor:
+    case Instruction::And:
+    case Instruction::Or:
+    case Instruction::Sub:
+    case Instruction::FSub:
+    case Instruction::Shl:
+    case Instruction::LShr:
+    case Instruction::AShr:
+    case Instruction::UDiv:
+    case Instruction::SDiv:
+      return true;
+    default:
+      return false;
+  }
+}
+
 void print_gep(Function *F, Geps &g) {
   Instruction *I = g.get_instruction();
   DEBUG(dbgs() << "I: " << *I << "\n");
@@ -337,7 +361,12 @@ bool Optimize::runOnFunction(Function &F) {
         I->getOperand(1)->getType()->isVectorTy())
       assert(0 && "Vector type");
 
-    if (can_insert_if(g) && worth_insert_if(g)){
+    // filter_instructions => Filter arithmetic instructions
+    // can_insert_if       => Check for corner cases. i.e. in a SUB, the `v` 
+    //                        value must be on the right and side (*p = *p - v) 
+    //                        and not on the left (*p = v - *p)
+    // worth_insert_if     => Cost model
+    if (filter_instructions(g) && can_insert_if(g) && worth_insert_if(g)){
       print_gep(&F, g);
       insert_if(g);
       DEBUG(dbgs() << "\n");

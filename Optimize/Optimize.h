@@ -18,6 +18,7 @@ private:
 
   bool can_insert_if(Geps &g);
   bool worth_insert_if(Geps &g);
+  bool filter_instructions(Geps &g);
   
   Value* get_identity(const Geps &g);
 public:
