@@ -199,6 +199,7 @@ bool Count::runOnModule(Module &M) {
     // Let's give an id for each instruction of interest
     for (auto &g : gs) {
       Instruction *I = g.get_instruction();
+      // errs() << "I: " << *I << "\n";
       assign_id(I);
 
       // sanity check for vector instructions
@@ -210,22 +211,6 @@ bool Count::runOnModule(Module &M) {
         track_float(M, I, I->getOperand(0), I->getOperand(1), g);
       } else {
         track_int(M, I, I->getOperand(0), I->getOperand(1), g);
-      }
-    }
-
-    for (auto &BB : F) {
-      for (auto &I : BB) {
-        if (false) {
-          if (I.getOperand(0)->getType()->isVectorTy() ||
-              I.getOperand(1)->getType()->isVectorTy())
-            errs() << "Vector: " << I << "\n";
-
-          // if (I.getType()->isFloatingPointTy()) {
-          //   track_float(M, &I, I.getOperand(0), I.getOperand(1), *g);
-          // } else{
-          //   track_int(M, &I, I.getOperand(0), I.getOperand(1), *g);
-          // }
-        }
       }
     }
   }

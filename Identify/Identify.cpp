@@ -47,6 +47,7 @@ bool Identify::is_arith_inst_of_interest(Instruction *I) {
   case Instruction::FAdd:
   case Instruction::FSub:
   case Instruction::FMul:
+  case Instruction::FDiv:
     return true;
   default:
     return false;

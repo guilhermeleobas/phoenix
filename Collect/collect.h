@@ -12,27 +12,29 @@
 
 #pragma once
 
-#include "../Identify/Position.h"
+// This file includes an Enum saying which operand is the target operand
+#include "../Identify/Position.h" 
 
 #define FILENAME "store_count.txt"
 // #define MAX 100000
 
-/*
-  `records` record each memory access (load/store)
-*/
+//
+// `records` record each memory access (load/store)
+// 
+
 // static void* records[MAX];
 static void **records;
 static long long store_after_load = 0;
 static long long num_dynamic_stores = 0;
 
-/*
-  mapping between each store and its dependencies
-  store(0) -> load(0), load(2), load(5), load(xyz)
-  store(1) -> load(1)
-  store(2) -> []
-  store(3) -> load(0), load(1), ...
-  ...
-*/
+//  
+//  mapping between each store and its dependencies
+//  store(0) -> load(0), load(2), load(5), load(xyz)
+//  store(1) -> load(1)
+//  store(2) -> []
+//  store(3) -> load(0), load(1), ...
+//  ...
+//
 static int **dependency;
 
 void record_load(long long, void *);
@@ -83,14 +85,14 @@ typedef struct {
   dynamic_execution *dyn;
 } arithmetic_inst;
 
-#define LENGTH 14
+#define LENGTH 15
 
 static arithmetic_inst data[LENGTH] = {
     {"Add", 11, 0, 0, 0, NULL},  {"FAdd", 12, 0, 0, 0, NULL}, {"Sub", 13, 0, 0, 0, NULL},
     {"FSub", 14, 0, 0, 0, NULL}, {"Mul", 15, 0, 0, 0, NULL},  {"FMul", 16, 0, 0, 0, NULL},
     {"Xor", 28, 0, 0, 0, NULL},  {"Shl", 23, 0, 0, 0, NULL},  {"LShr", 24, 0, 0, 0, NULL},
     {"AShr", 25, 0, 0, 0, NULL}, {"UDiv", 17, 0, 0, 0, NULL}, {"SDiv", 18, 0, 0, 0, NULL},
-    {"And", 26, 0, 0, 0, NULL},  {"Or", 27, 0, 0, 0, NULL},
+    {"And", 26, 0, 0, 0, NULL},  {"Or", 27, 0, 0, 0, NULL}, {"FDiv", 19, 0, 0, 0, NULL},
 };
 
 int has_identity(unsigned opcode, void *a, void *b, unsigned op_pos);

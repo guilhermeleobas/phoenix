@@ -186,6 +186,12 @@ int has_identity(unsigned opcode, void* a, void* b, unsigned op_pos) {
     else
       return NONE;
 
+  case 19: // FDiv
+    if (op_pos == FIRST && DB(b) == 1.0) // *p = *p / 1.0
+      return ID_B;
+    else
+      return NONE;
+
   case 23: // Shl
   case 24: // LShr
   case 25: // AShr
@@ -242,7 +248,7 @@ void record_arith(unsigned opcode, long long static_id, void* a,
 
   record_id_individually(&data[index], static_id, has);
 
-  // printf("opcode: %d with value: %lld\n", opcode, value);
+  /* printf("opcode: %d with value: %lld\n", opcode, value); */
 }
 
 void record_arith_int(unsigned opcode, long long static_id, long long a,
@@ -290,7 +296,7 @@ void dump_arith() {
 
   for (int i = 0; i < LENGTH; i++) {
     dump_by_type(&data[i]);
-    fprintf(f, "%s, %llu, %llu\n", data[i].name, data[i].identity_exec,
+    fprintf(f, "%s,%llu,%llu\n", data[i].name, data[i].identity_exec,
             data[i].total_exec);
   }
   fprintf(f, "\n");
