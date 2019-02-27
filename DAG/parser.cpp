@@ -1,0 +1,76 @@
+
+#include "llvm/ADT/Statistic.h" // For the STATISTIC macro.
+#include "llvm/Analysis/VectorUtils.h"
+#include "llvm/IR/Constants.h"         // For ConstantData, for instance.
+#include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/InstIterator.h" // To use the iterator instructions(f)
+#include "llvm/IR/Instructions.h" // To have access to the Instructions.
+#include "llvm/IR/IntrinsicInst.h"
+#include "llvm/IR/Metadata.h"
+#include "llvm/Support/raw_ostream.h" // For dbgs()
+#include "llvm/Transforms/Utils/BasicBlockUtils.h"
+#include "llvm/IR/Instructions.h" // To have access to the Instructions.
+
+#include "parser.h"
+
+using namespace llvm;
+
+phoenix::Node* myParser(BasicBlock *BB, Value *V){
+
+  // errs() << "Value: " << *V << "\n";
+
+  if (Constant *C = dyn_cast<Constant>(V)){
+    if (isa<ConstantInt>(C))
+      return new phoenix::ConstantIntNode(C);
+    return new phoenix::ConstantNode(C);
+  }
+  else if (Instruction *I = dyn_cast<Instruction>(V)){
+    if (I->getParent() != BB)
+      return new phoenix::TerminalNode(I);
+
+    if (isa<BinaryOperator>(I)){
+      phoenix::Node *left = myParser(BB, I->getOperand(0));
+      phoenix::Node *right = myParser(BB, I->getOperand(1));
+      return new phoenix::BinaryNode(left, right, I);
+    }
+    else if (isa<UnaryInstruction>(I)){
+      if (isa<LoadInst>(I) || isa<StoreInst>(I))
+        return new phoenix::MemoryNode(I);
+
+      phoenix::Node* node = myParser(BB, I->getOperand(0));
+      return new phoenix::UnaryNode(node, I);
+    }
+    else if (isa<PHINode>(I)){
+      // phoenix::Node *left = myParser(BB, I->getOperand(0));
+      // phoenix::Node *right = myParser(BB, I->getOperand(1));
+      // return new phoenix::PHINode(left, right, I);
+      return new phoenix::PHINode(I);
+    }
+    else if (isa<CmpInst>(I)){
+      phoenix::Node *left = myParser(BB, I->getOperand(0));
+      phoenix::Node *right = myParser(BB, I->getOperand(1));
+      return new phoenix::CmpNode(left, right, I);
+    }
+    else if (isa<CallInst>(I)){
+      return new phoenix::TerminalNode(I);
+    }
+  }
+  else if (isa<Argument>(V)){
+    return new phoenix::TerminalNode(V);
+  }
+
+  std::string str = "Instruction not supported: ";
+  llvm::raw_string_ostream rso(str);
+  V->print(rso);
+  llvm_unreachable(str.c_str());
+
+  return nullptr;
+}
+
+phoenix::Node* myParser(Instruction *I){
+  return myParser(I->getParent(), I);
+}
+
+void dumpExpression(phoenix::Node *node){
+  errs() << node->name() << " = " << node->toString() << "\n";
+}
