@@ -8,7 +8,7 @@ link_directories(${LLVM_LIBRARY_DIRS})
 list(APPEND CMAKE_MODULE_PATH "${LLVM_DIR}")
 include(AddLLVM)
 
-add_llvm_loadable_module(DAG ../Identify/Identify.cpp DAG.cpp parser.cpp)
+add_llvm_loadable_module(DAG ../Identify/Identify.cpp DAG.cpp node.cpp parser.cpp)
 
 # Use C++11 to compile your pass (i.e., supply -std=c++11).
 target_compile_features(DAG PRIVATE cxx_range_for cxx_auto_type)

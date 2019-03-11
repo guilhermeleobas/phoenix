@@ -15,190 +15,218 @@ using namespace llvm;
 
 namespace phoenix {
 
-static int ID = 0;
+std::string get_symbol(Instruction *I);
 
-inline int get_id() {
-  return ID++;
-}
-
-inline std::string get_symbol(Instruction *I) {
-  switch (I->getOpcode()) {
-    case Instruction::Add:
-      return "+";
-    case Instruction::FAdd:
-      return "+.";
-    case Instruction::Sub:
-      return "-";
-    case Instruction::FSub:
-      return "-.";
-    case Instruction::Xor:
-      return "^";
-    case Instruction::Shl:
-      return "<<";
-    case Instruction::LShr:
-    case Instruction::AShr:
-      return ">>";
-    case Instruction::Mul:
-      return "*";
-    case Instruction::FMul:
-      return "*.";
-    case Instruction::UDiv:
-    case Instruction::SDiv:
-      return "/";
-    case Instruction::FDiv:
-      return "/.";
-    case Instruction::And:
-      return "&";
-    case Instruction::Or:
-      return "|";
-    case Instruction::SIToFP:
-      return "sitofp";
-    default:
-      return I->getOpcodeName();
-      std::string str = "Symbol not found: ";
-      llvm::raw_string_ostream rso(str);
-      I->print(rso);
-      llvm_unreachable(str.c_str());
-  }
-}
-
-class Node {
+class Counter{
  public:
-  Node() {}
-  virtual void to_dot(void) const = 0;
-  virtual std::string name(void) const = 0;
-  virtual std::string toString(void) const = 0;
-  virtual ~Node() {}
+  static int ID;
+  const int uniq;
+ public:
+  Counter(): uniq(ID++){}
+  const int getID() const { return uniq; }
 };
 
-class ConstantNode : public Node {
+class Label: private Counter{
+ public:
+  std::string getLabel() const {
+    return "node" + std::to_string(getID());
+  }
+};
+
+class Node: public Label {
+ private:
+  Value *V;
+
  protected:
-  Constant *C;
+  Value* getValue() const { return V; }
+  Instruction* getInst() const { return dyn_cast<Instruction>(V); }
 
  public:
-  ConstantNode(Constant *C) : C(C) {}
+  Node(Value *V): V(V), Label() {}
+  virtual ~Node() {}
 
-  void to_dot() const override {}
-  std::string name() const override { return C->getName(); }
-  std::string toString() const override { return "Cnt"; }
-};
+  virtual void toDot(void) const = 0;
+  virtual std::string toString(void) const = 0;
+  virtual unsigned getHeight(void) const = 0;
 
-class ConstantIntNode : public ConstantNode {
- public:
-  ConstantIntNode(Constant *C) : ConstantNode(C) {}
-
-  std::string toString() const override {
-    return std::to_string(dyn_cast<ConstantInt>(C)->getSExtValue());
+  std::string name(void) const {
+    return std::string(getValue()->getName());
   }
+
+  std::string dump(void) const {
+    std::string str;
+    llvm::raw_string_ostream rso(str);
+    getValue()->print(rso);
+    return str;
+  }
+
+  virtual std::string instType(void) const {
+    if (Instruction *I = dyn_cast<Instruction>(V)){
+      return std::string(I->getOpcodeName());
+    }
+    else {
+      std::string type_str;
+      llvm::raw_string_ostream rso(type_str);
+      getValue()->getType()->print(rso);
+      return type_str;
+    }
+  };
 };
+
+
 
 class UnaryNode : public Node {
  protected:
-  Instruction *I;
   Node *node;
 
  public:
-  UnaryNode(Node *node, Instruction *I) {
-    this->node = std::move(node);
-    this->I = I;
+  UnaryNode(Node *node, Instruction *I): node(node), Node(I){}
+
+  void toDot() const override {
+    std::string labelA = this->getLabel();
+    std::string labelB = node->getLabel();
+    errs() << labelA << " [label = " << this->name() << "]\n";
+    errs() << labelA << " -> " << labelB << "\n";
+    node->toDot();
   }
 
-  std::string name() const override { return std::string(I->getName()); }
-
-  void to_dot() const override {
-    errs() << I->getName() << " -> " << node->name() << ";"
-           << "\n";
+  std::string toString() const override {
+    return get_symbol(getInst()) + "(" + node->toString() + ")";
   }
 
-  std::string toString() const override { return get_symbol(I) + "(" + node->toString() + ")"; }
+  Node* getNode(void) const { return node; }
+
+  unsigned getHeight(void) const override { return 1 + node->getHeight(); }
+};
+
+class StoreNode : public UnaryNode {
+ public:
+  StoreNode(Node *node, Instruction *I) : UnaryNode(node, I){}
+
+  void toDot() const override {
+    std::string labelA = this->getLabel();
+    std::string labelB = node->getLabel();
+    errs() << labelA << " [label = store]\n";
+    errs() << labelA << " -> " << labelB << "\n";
+    node->toDot();
+  }
+
+  std::string toString(void) const override {
+    return "Store -> " + node->name() + " = " + node->toString();
+  }
+
+  unsigned getHeight(void) const override {
+    return node->getHeight();
+  }
 };
 
 class BinaryNode : public Node {
  protected:
   Node *left;
   Node *right;
-  Instruction *I;
 
  public:
-  BinaryNode(Node *left, Node *right, Instruction *I) {
-    this->left = left;
-    this->right = right;
-    this->I = I;
+  BinaryNode(Node *left, Node *right, Instruction *I): left(left), right(right), Node(I){}
+
+  void toDot() const override {
+    std::string labelA = this->getLabel();
+    std::string labelB = left->getLabel();
+    std::string labelC = right->getLabel();
+
+    errs() << labelA << " [label = \"" << this->name() << " = " 
+           << "\\n" << get_symbol(getInst()) << "\"]\n";
+    errs() << labelA << " -> " << labelB << "\n";
+    errs() << labelA << " -> " << labelC << "\n";
+
+    left->toDot();
+    right->toDot();
   }
-
-  void to_dot() const override {
-    std::string symbol = "\"" + get_symbol(I) + std::to_string(get_id()) + "\"";
-    errs() << I->getName() << " -> " << symbol << ";\n";
-    errs() << symbol << " -> " << left->name() << ";"
-           << "\n";
-    errs() << symbol << " -> " << right->name() << ";"
-           << "\n";
-
-    left->to_dot();
-    right->to_dot();
-  }
-
-  std::string name() const override { return std::string(I->getName()); }
 
   std::string toString() const override {
-    return "(" + left->toString() + " " + get_symbol(I) + " " + right->toString() + ")";
+    return "(" + left->toString() + " " + get_symbol(getInst()) + " " + right->toString() + ")";
   }
+
+  unsigned getHeight(void) const override {
+    return 1 + std::max(left->getHeight(), right->getHeight());
+  }
+
+  Node* getLeft(void) const { return left; }
+  Node* getRight(void) const { return right; }
 };
 
 class CmpNode : public BinaryNode {
  public:
   CmpNode(Node *left, Node *right, Instruction *I) : BinaryNode(left, right, I){}
-  std::string toString(void) const {
-    return "Cmp(" + left->toString() + "," + right->toString() + ")";
-  }
 };
 
 class TerminalNode : public Node {
- protected:
-  Value *I;
-
  public:
-  TerminalNode(Instruction *I) : I(I) {}
-  TerminalNode(Value *V) : I(V) {}
-  void to_dot() const override {}
-  std::string name() const override { return I->getName(); }
-  std::string toString() const override { return I->getName(); }
+  TerminalNode(Value *V) : Node(V) {}
+  void toDot() const override {
+    std::string labelA = this->getLabel();
+    errs() << labelA << " [label = \"" << this->name() << "\\n" << this->instType() << "\"]\n";
+  }
+
+  std::string toString() const override {
+    return name();
+  }
+
+  unsigned getHeight(void) const override { return 1; }
 };
 
-class MemoryNode : public TerminalNode {
+class LoadNode : public TerminalNode {
  public:
-  MemoryNode(Instruction *I): TerminalNode(I){}
+  LoadNode(Instruction *I): TerminalNode(I){}
 };
 
 class PHINode : public TerminalNode {
  public:
   PHINode(Instruction *I): TerminalNode(I){}
-
-  std::string toString() const override { return std::string(I->getName()) + "[PHI]"; }
 };
 
+class ArgumentNode : public TerminalNode {
+ public:
+  ArgumentNode(Value *V) : TerminalNode(V){}
 
+  std::string instType() const override {
+    return "Argument";
+  }
+};
 
+class ConstantNode : public TerminalNode {
+ public:
+  ConstantNode(Constant *C) : TerminalNode(C){}
 
+  void toDot() const override {
+    std::string labelA = this->getLabel();
+    errs() << labelA << " [label = \"" << *getValue() << "\"]\n";
+  }
 
+  std::string toString() const override {
+    std::string str;
+    llvm::raw_string_ostream rso(str);
+    getValue()->print(rso);
+    return str;
+  }
+};
 
+class ConstantIntNode : public ConstantNode {
+ public:
+  ConstantIntNode(Constant *C) : ConstantNode(C){}
 
+  void toDot() const override{
+    std::string value = "";
+    value = std::to_string(dyn_cast<ConstantInt>(getValue())->getSExtValue());
 
+    std::string labelA = this->getLabel();
+    errs() << labelA << " [label = " << value << "]\n";
+  }
 
+  std::string toString() const override {
+    return std::to_string(dyn_cast<ConstantInt>(getValue())->getSExtValue());
+  }
+};
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+unsigned getHeight(phoenix::Node *node);
 
 }  // namespace phoenix

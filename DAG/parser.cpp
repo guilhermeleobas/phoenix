@@ -34,16 +34,13 @@ phoenix::Node* myParser(BasicBlock *BB, Value *V){
       return new phoenix::BinaryNode(left, right, I);
     }
     else if (isa<UnaryInstruction>(I)){
-      if (isa<LoadInst>(I) || isa<StoreInst>(I))
-        return new phoenix::MemoryNode(I);
+      if (isa<LoadInst>(I))
+        return new phoenix::LoadNode(I);
 
       phoenix::Node* node = myParser(BB, I->getOperand(0));
       return new phoenix::UnaryNode(node, I);
     }
     else if (isa<PHINode>(I)){
-      // phoenix::Node *left = myParser(BB, I->getOperand(0));
-      // phoenix::Node *right = myParser(BB, I->getOperand(1));
-      // return new phoenix::PHINode(left, right, I);
       return new phoenix::PHINode(I);
     }
     else if (isa<CmpInst>(I)){
@@ -54,10 +51,16 @@ phoenix::Node* myParser(BasicBlock *BB, Value *V){
     else if (isa<CallInst>(I)){
       return new phoenix::TerminalNode(I);
     }
+    else if (StoreInst *store = dyn_cast<StoreInst>(I)){
+      phoenix::Node *node = myParser(BB, store->getValueOperand());
+      return new phoenix::StoreNode(node, store);
+    }
   }
   else if (isa<Argument>(V)){
-    return new phoenix::TerminalNode(V);
+    return new phoenix::ArgumentNode(V);
   }
+
+  errs() << isa<UnaryInstruction>(V) << ' ' << isa<StoreInst>(V) << "\n";
 
   std::string str = "Instruction not supported: ";
   llvm::raw_string_ostream rso(str);
@@ -72,5 +75,11 @@ phoenix::Node* myParser(Instruction *I){
 }
 
 void dumpExpression(phoenix::Node *node){
-  errs() << node->name() << " = " << node->toString() << "\n";
+  errs() << node->toString() << "\n";
+}
+
+void dumpDot(phoenix::Node *node){
+  errs() << "digraph G {\n"; 
+  node->toDot();
+  errs() << "}\n";
 }

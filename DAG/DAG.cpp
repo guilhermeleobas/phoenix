@@ -43,8 +43,13 @@ bool DAG::runOnFunction(Function &F) {
         I->getOperand(1)->getType()->isVectorTy())
       assert(0 && "Vector type");
 
-    auto node = myParser(I);
+    auto node = myParser(g.get_store_inst());
+
     dumpExpression(node);
+    dumpDot(node);
+    errs() << "Height: " << node->getHeight() << "\n";
+    errs() << "\n";
+
   }
 
   return false;
