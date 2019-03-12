@@ -67,7 +67,7 @@ unsigned Count::get_id(Instruction *I){
 }
 
 void Count::assign_id(Instruction *I){
-  assert(mapa.find(I) == mapa.end() && "Instructino already exists on map<Instruction*, unsigned>");
+  assert(mapa.find(I) == mapa.end() && "Instruction already exists on map<Instruction*, unsigned>");
   unsigned opcode = I->getOpcode();
   mapa[I] = ++opcode_counter[opcode];;
 }
@@ -199,7 +199,7 @@ bool Count::runOnModule(Module &M) {
     // Let's give an id for each instruction of interest
     for (auto &g : gs) {
       Instruction *I = g.get_instruction();
-      // errs() << "I: " << *I << "\n";
+      errs() << "I: " << *I << "\n";
       assign_id(I);
 
       // sanity check for vector instructions

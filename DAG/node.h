@@ -10,12 +10,15 @@
 #include "llvm/IR/Metadata.h"
 #include "llvm/Support/raw_ostream.h"  // For dbgs()
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
+#include "llvm/IR/DebugInfoMetadata.h" // For DILocation
 
 using namespace llvm;
 
 namespace phoenix {
 
 std::string get_symbol(Instruction *I);
+std::string getFileName(Instruction *I);
+int getLineNo(Value *V);
 
 class Counter{
  public:
@@ -111,8 +114,12 @@ class StoreNode : public UnaryNode {
     node->toDot();
   }
 
+  void dumpDebugInfo(void) const {
+    errs() << *getInst() << " -> " << getFileName(getInst()) << "/" << std::to_string(getLineNo(getValue())) << "\n";
+  }
+
   std::string toString(void) const override {
-    return "Store -> " + node->name() + " = " + node->toString();
+    return "\nStore -> " + node->name() + " = " + node->toString();
   }
 
   unsigned getHeight(void) const override {
@@ -182,6 +189,11 @@ class LoadNode : public TerminalNode {
 class PHINode : public TerminalNode {
  public:
   PHINode(Instruction *I): TerminalNode(I){}
+};
+
+class SelectNode : public TerminalNode {
+ public:
+  SelectNode(Instruction *I) : TerminalNode(I){}
 };
 
 class ArgumentNode : public TerminalNode {

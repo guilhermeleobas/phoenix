@@ -45,11 +45,13 @@ bool DAG::runOnFunction(Function &F) {
 
     auto node = myParser(g.get_store_inst());
 
-    dumpExpression(node);
-    dumpDot(node);
-    errs() << "Height: " << node->getHeight() << "\n";
-    errs() << "\n";
-
+    if (node->getHeight() == 9){
+      dumpExpression(node);
+      dumpDot(node);
+      errs() << "Height: " << node->getHeight() << "\n";
+      static_cast<phoenix::StoreNode*>(node)->dumpDebugInfo();
+      errs() << "\n";
+    }
   }
 
   return false;
