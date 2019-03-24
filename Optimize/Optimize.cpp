@@ -359,7 +359,8 @@ bool Optimize::runOnFunction(Function &F) {
     // sanity check for vector instructions
     if (I->getOperand(0)->getType()->isVectorTy() ||
         I->getOperand(1)->getType()->isVectorTy())
-      assert(0 && "Vector type");
+      continue;
+      // assert(0 && "Vector type");
 
     // filter_instructions => Filter arithmetic instructions
     // can_insert_if       => Check for corner cases. i.e. in a SUB, the `v` 

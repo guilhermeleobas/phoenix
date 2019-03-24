@@ -101,12 +101,28 @@ bool Identify::check_operands_equals(const Value *vu, const Value *vv) {
 Optional<GetElementPtrInst *> Identify::check_op(LoadInst *li,
                                                  GetElementPtrInst *dest_gep) {
 
-  // To-Do, check for types other than GetElementPtrInst
-  if (!isa<GetElementPtrInst>(li->getPointerOperand()))
-    return None;
+  GetElementPtrInst *op_gep = nullptr;
 
-  GetElementPtrInst *op_gep =
-      dyn_cast<GetElementPtrInst>(li->getPointerOperand());
+  // To-Do: Check for other types? I know that %ptr can be a global variable
+  if (BitCastInst *bit = dyn_cast<BitCastInst>(li->getPointerOperand())){
+    if (isa<GetElementPtrInst>(bit->getOperand(0)))
+      op_gep = cast<GetElementPtrInst>(bit->getOperand(0));
+    else
+      return None;
+  }
+  else if (isa<GetElementPtrInst>(li->getPointerOperand())){
+    op_gep = cast<GetElementPtrInst>(li->getPointerOperand());
+  }
+  else {
+    return None;
+  }
+
+  // To-Do, check for types other than GetElementPtrInst
+  // if (!isa<GetElementPtrInst>(li->getPointerOperand()))
+    // return None;
+
+  // GetElementPtrInst *op_gep =
+      // cast<GetElementPtrInst>(li->getPointerOperand());
 
   // Check 4: Pointers should be from the same basic block
   if (dest_gep->getParent() != op_gep->getParent())
@@ -225,12 +241,27 @@ Optional<Geps> Identify::good_to_go(Instruction *I) {
   if (!store)
     return None;
 
-  // To-Do: Check for other types? I know that %ptr can be a global variable
-  if (!isa<GetElementPtrInst>((*store)->getPointerOperand()))
-    return None;
+  GetElementPtrInst *dest_gep = nullptr;
 
-  GetElementPtrInst *dest_gep =
-      dyn_cast<GetElementPtrInst>((*store)->getPointerOperand());
+  // To-Do: Check for other types? I know that %ptr can be a global variable
+  if (BitCastInst *bit = dyn_cast<BitCastInst>((*store)->getPointerOperand())){
+    if (isa<GetElementPtrInst>(bit->getOperand(0)))
+      dest_gep = cast<GetElementPtrInst>(bit->getOperand(0));
+    else
+      return None;
+  }
+  else if (isa<GetElementPtrInst>((*store)->getPointerOperand())){
+    dest_gep = cast<GetElementPtrInst>((*store)->getPointerOperand());
+  }
+  else {
+    return None;
+  }
+
+  // if (!isa<GetElementPtrInst>((*store)->getPointerOperand()))
+  //   return None;
+
+  // GetElementPtrInst *dest_gep =
+  //     dyn_cast<GetElementPtrInst>((*store)->getPointerOperand());
 
   // Perform a check on both operands
   for (unsigned num_op = 0; num_op < 2; ++num_op) {
@@ -246,8 +277,8 @@ Optional<Geps> Identify::good_to_go(Instruction *I) {
       continue;
 
     // Check 5:
-    GetElementPtrInst *dest_gep =
-        dyn_cast<GetElementPtrInst>((*store)->getPointerOperand());
+    // GetElementPtrInst *dest_gep =
+    //     dyn_cast<GetElementPtrInst>((*store)->getPointerOperand());
     if (Optional<GetElementPtrInst *> op_gep = check_op(load, dest_gep)) {
       return Geps(dest_gep, *op_gep, *store, I, num_op + 1);
     }

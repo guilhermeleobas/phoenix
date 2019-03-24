@@ -26,46 +26,38 @@ phoenix::Node* myParser(BasicBlock *BB, Value *V){
   }
   else if (Instruction *I = dyn_cast<Instruction>(V)){
     if (I->getParent() != BB)
+      return new phoenix::ForeignNode(I);
+
+    if (isa<InsertElementInst>(I) ||
+        isa<SelectInst>(I) ||
+        isa<PHINode>(I) ||
+        isa<CallInst>(I) ||
+        isa<LoadInst>(I))
       return new phoenix::TerminalNode(I);
 
-    if (isa<BinaryOperator>(I)){
+
+    if (isa<BinaryOperator>(I) ||
+        isa<CmpInst>(I)){
       phoenix::Node *left = myParser(BB, I->getOperand(0));
       phoenix::Node *right = myParser(BB, I->getOperand(1));
       return new phoenix::BinaryNode(left, right, I);
     }
-    else if (isa<SelectInst>(I)){
-      return new phoenix::SelectNode(I);
-    }
     else if (isa<UnaryInstruction>(I)){
-      if (isa<LoadInst>(I))
-        return new phoenix::LoadNode(I);
-
       phoenix::Node* node = myParser(BB, I->getOperand(0));
       return new phoenix::UnaryNode(node, I);
     }
-    else if (isa<PHINode>(I)){
-      return new phoenix::PHINode(I);
-    }
-    else if (isa<CmpInst>(I)){
-      phoenix::Node *left = myParser(BB, I->getOperand(0));
-      phoenix::Node *right = myParser(BB, I->getOperand(1));
-      return new phoenix::CmpNode(left, right, I);
-    }
-    else if (isa<CallInst>(I)){
-      return new phoenix::TerminalNode(I);
-    }
     else if (StoreInst *store = dyn_cast<StoreInst>(I)){
       phoenix::Node *node = myParser(BB, store->getValueOperand());
-      return new phoenix::StoreNode(node, store);
+      return new phoenix::UnaryNode(node, store);
     }
   }
   else if (isa<Argument>(V)){
-    return new phoenix::ArgumentNode(V);
+    return new phoenix::TerminalNode(V);
   }
 
   errs() << isa<UnaryInstruction>(V) << ' ' << isa<StoreInst>(V) << "\n";
 
-  std::string str = "Instruction not supported: ";
+  std::string str = "Instruction not supported (parsing): ";
   llvm::raw_string_ostream rso(str);
   V->print(rso);
   llvm_unreachable(str.c_str());
@@ -77,12 +69,12 @@ phoenix::Node* myParser(Instruction *I){
   return myParser(I->getParent(), I);
 }
 
-void dumpExpression(phoenix::Node *node){
-  errs() << node->toString() << "\n";
-}
+// void dumpExpression(phoenix::Node *node){
+//   errs() << node->toString() << "\n";
+// }
 
-void dumpDot(phoenix::Node *node){
-  errs() << "digraph G {\n"; 
-  node->toDot();
-  errs() << "}\n";
-}
+// void dumpDot(phoenix::Node *node){
+//   errs() << "digraph G {\n"; 
+//   node->toDot();
+//   errs() << "}\n";
+// }

@@ -22,6 +22,8 @@
 #include <queue>
 
 #include "DAG.h"
+#include "dotVisitor.h"
+#include "constraintVisitor.h"
 
 #define DEBUG_TYPE "DAG"
 
@@ -39,19 +41,27 @@ bool DAG::runOnFunction(Function &F) {
     Instruction *I = g.get_instruction();
 
     // sanity check for vector instructions
-    if (I->getOperand(0)->getType()->isVectorTy() ||
-        I->getOperand(1)->getType()->isVectorTy())
-      assert(0 && "Vector type");
+    // if (I->getOperand(0)->getType()->isVectorTy() ||
+    //     I->getOperand(1)->getType()->isVectorTy()){
+    //   errs() << *I << "\n";
+    //   assert(0 && "Vector type");
+    // }
 
-    auto node = myParser(g.get_store_inst());
+    phoenix::UnaryNode *node = (phoenix::UnaryNode*) myParser(g.get_store_inst());
 
-    if (node->getHeight() == 9){
-      dumpExpression(node);
-      dumpDot(node);
-      errs() << "Height: " << node->getHeight() << "\n";
-      static_cast<phoenix::StoreNode*>(node)->dumpDebugInfo();
-      errs() << "\n";
-    }
+    DotVisitor t;
+    ConstraintVisitor cv(node);
+
+    node->accept(cv);
+
+    // node->accept(t);
+    // t.print();
+
+    // dumpExpression(node);
+    // dumpDot(node);
+    // errs() << "Height: " << node->getHeight() << "\n";
+    // static_cast<phoenix::StoreNode*>(node)->dumpDebugInfo();
+    // errs() << "\n";
   }
 
   return false;
