@@ -1,41 +1,7 @@
 #pragma once
 
 #include "visitor.h"
-
-struct constraintValue {
-  enum Type {
-    Int,
-    Double,
-    Null
-  };
-
-  Type type;
-
-  union {
-    int intValue;
-    double doubleValue;
-  };
-
-  constraintValue(){}
-
-  constraintValue (int x) : type(Type::Int){
-    intValue = x;
-  }
-
-  constraintValue (double x) : type(Type::Double){
-    doubleValue = x;
-  }
-
-  bool operator==(const constraintValue &other) const {
-    if (type != other.type)
-      return false;
-    
-    if (type == Type::Int)
-      return intValue == other.intValue;
-    else
-      return doubleValue == other.doubleValue;   
-  }
-};
+#include "constraint.h"
 
 constraintValue getDestructor(Instruction *I){
   switch (I->getOpcode()) {
@@ -48,7 +14,12 @@ constraintValue getDestructor(Instruction *I){
   case Instruction::FDiv:
     return constraintValue(0.0);
   default:
-    break;
+    errs() << "No destructor for: " << *I << "\n";
+    return constraintValue();
+    std::string str = "No destructor for: ";
+    llvm::raw_string_ostream rso(str);
+    I->print(rso);
+    llvm_unreachable(str.c_str());
   }
 }
 
@@ -96,19 +67,56 @@ class ConstraintVisitor : public Visitor {
   constraintValue id;
 
   ConstraintVisitor(const phoenix::UnaryNode *unary) {
+    // One first call this Constraint with the unary being a store instruction
+    // Let's make sure this happens
     assert(isa<StoreInst>(unary->getInst()));
-    constraintValue id = getIdentity(unary->child->getInst());
-  }
 
-  void visit(const phoenix::UnaryNode *unary) override {
-    
-  }
-
-  void visit(const phoenix::BinaryNode *binary) override {
+    phoenix::Node *child = unary->child;
+    id = getIdentity(child->getInst());
 
   }
 
-  void visit(const phoenix::TerminalNode *term) override {
+  void visit(phoenix::StoreNode *store) override {
+    store->child->accept(*this);
+  }
 
+  void visit(phoenix::UnaryNode *unary) override {
+
+    // for a given unary instruction
+    // one propagates the `id` iff the destructor
+    // of the operand(unary) == id
+    constraintValue des = getDestructor(unary->getInst());
+
+    if (des == id){
+      unary->setConstraint(id);
+      unary->child->accept(*this);
+    }
+
+  }
+
+  void visit(phoenix::BinaryNode *binary) override {
+
+    // The same is valid here! One only propagates `id` iff
+    // id == destructor(binary_op);
+    constraintValue des = getDestructor(binary->getInst());
+
+    if (des == id){
+      binary->setConstraint(id);
+      binary->left->accept(*this);
+      binary->right->accept(*this);
+    }
+
+  }
+
+  void visit(phoenix::TargetOpNode *target) override {
+    target->getOther()->accept(*this);
+  }
+
+  void visit(phoenix::TerminalNode *term) override {
+    term->setConstraint(id);
+  }
+
+  void visit(phoenix::ForeignNode *f) override {
+    return;
   }
 };

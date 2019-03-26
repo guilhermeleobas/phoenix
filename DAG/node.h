@@ -15,49 +15,76 @@
 using namespace llvm;
 
 #include "visitor.h"
+#include "constraint.h"
 
 class Visitor;
 
 namespace phoenix {
 
+#define MAKE_CLASSOF(nk_begin, nk_end)    \
+  static bool classof(const Node *node) { \
+    return node->getKind() >= nk_begin || \
+           node->getKind() <= nk_end;     \
+  }                                       \
+
 #define MAKE_VISITABLE \
   virtual void accept(Visitor &vis) override { \
     vis.visit(this); \
-  } \
+  }
 
 std::string getFileName(Instruction *I);
 int getLineNo(Value *V);
 
-class Counter{
- public:
-  static int ID;
-  const int uniq;
- public:
-  Counter(): uniq(ID++){}
-  const int getID() const { return uniq; }
-};
+// class Counter{
+//  public:
+//   static int ID;
+//   const int uniq;
+//  public:
+//   Counter(): uniq(ID++){}
+//   const int getID() const { return uniq; }
+// };
 
-class Label: private Counter{
- public:
-  std::string getLabel() const {
-    return "node" + std::to_string(getID());
-  }
-};
+// class Label: private Counter{
+//  public:
+//   std::string getLabel() const {
+//     return "node" + std::to_string(getID());
+//   }
+// };
 
-class Node: public Label {
+
+class Node: public Constraint {
+ public:
+  enum NodeKind {
+    NK_UnaryNode,
+    NK_StoreNode,
+    
+    NK_BinaryNode,
+    NK_TargetOpNode,
+
+    NK_TerminalNode,
+    NK_LoadNode,
+    NK_ForeignNode,
+    NK_ConstantNode,
+    NK_ConstantIntNode
+  };
  private:
   Value *V;
 
+  const NodeKind Kind;
 
  public:
-  Node(Value *V): V(V), Label() {}
+  Node(Value *V, NodeKind Kind): V(V), Kind(Kind) {}
   virtual ~Node() {}
+
+  NodeKind getKind() const { return Kind; }
 
   Value* getValue() const { return V; }
   Instruction* getInst() const { return dyn_cast<Instruction>(V); }
 
   std::string name(void) const {
-    return std::string(getValue()->getName());
+    if (getValue()->hasName())
+      return std::string(getValue()->getName());
+    return this->instType();
   }
 
   virtual std::string instType(void) const {
@@ -80,9 +107,21 @@ class Node: public Label {
 class UnaryNode : public Node {
  public:
   Node *child;
-  UnaryNode(Node *child, Instruction *I): child(child), Node(I){}
+  UnaryNode(Node *child, Instruction *I): child(child), Node(I, NK_UnaryNode){}
+  UnaryNode(Node *child, Instruction *I, NodeKind Kind): child(child), Node(I, Kind){}
 
   MAKE_VISITABLE;
+  MAKE_CLASSOF(NK_UnaryNode, NK_StoreNode);
+};
+
+class StoreNode : public UnaryNode {
+ public:
+  StoreNode(Node *child, Instruction *I): UnaryNode(child, I, NK_StoreNode){
+    assert(isa<phoenix::TargetOpNode>(child));
+  }
+
+  MAKE_VISITABLE;
+  MAKE_CLASSOF(NK_StoreNode, NK_StoreNode);
 };
 
 
@@ -91,31 +130,64 @@ class BinaryNode : public Node {
   Node *left;
   Node *right;
 
-  BinaryNode(Node *left, Node *right, Instruction *I): left(left), right(right), Node(I){}
-  MAKE_VISITABLE;
+  BinaryNode(Node *left, Node *right, Instruction *I): left(left), right(right), Node(I, NK_BinaryNode){}
+  BinaryNode(Node *left, Node *right, Instruction *I, NodeKind Kind): left(left), right(right), Node(I, Kind){}
 
+  MAKE_VISITABLE;
+  MAKE_CLASSOF(NK_BinaryNode, NK_TargetOpNode);
+
+};
+
+class TargetOpNode : public BinaryNode {
+ public:
+  TargetOpNode(BinaryNode *binary) : BinaryNode(binary->left, binary->right, binary->getInst(), NK_TargetOpNode){
+    assert((isa<LoadNode>(right) || isa<LoadNode>(left)) && "Either `left` or `right` must be a LoadNode!");
+  }
+
+  LoadNode* getLoad(void) const {
+    return isa<LoadNode>(left) ? cast<LoadNode>(left) : cast<LoadNode>(right);
+  }
+
+  Node* getOther(void) const {
+    return isa<LoadNode>(left) ? right : left;
+  }
+
+  MAKE_VISITABLE;
+  MAKE_CLASSOF(NK_TargetOpNode, NK_TargetOpNode);
 };
 
 class TerminalNode : public Node {
  public:
-  TerminalNode(Value *V) : Node(V) {}
+  TerminalNode(Value *V) : Node(V, NK_TerminalNode) {}
+  TerminalNode(Value *V, NodeKind Kind) : Node(V, Kind) {}
   MAKE_VISITABLE;
+  MAKE_CLASSOF(NK_TerminalNode, NK_ConstantIntNode);
+};
 
+class LoadNode : public TerminalNode {
+ public:
+  LoadNode(Value *V) : TerminalNode(V, NK_LoadNode){}
+  
+  MAKE_CLASSOF(NK_LoadNode, NK_LoadNode);
 };
 
 class ForeignNode : public TerminalNode {
  public:
-  ForeignNode(Value *V) : TerminalNode(V){}
+  ForeignNode(Value *V) : TerminalNode(V, NK_ForeignNode){}
+  MAKE_CLASSOF(NK_ForeignNode, NK_ForeignNode);
 };
 
 class ConstantNode : public TerminalNode {
  public:
-  ConstantNode(Constant *C) : TerminalNode(C){}
+  ConstantNode(Constant *C) : TerminalNode(C, NK_ConstantNode){}
+  ConstantNode(Constant *C, NodeKind Kind) : TerminalNode(C, Kind){}
+  MAKE_CLASSOF(NK_ConstantNode, NK_ConstantNode);
 };
 
 class ConstantIntNode : public ConstantNode {
  public:
-  ConstantIntNode(Constant *C) : ConstantNode(C){}
+  ConstantIntNode(Constant *C) : ConstantNode(C, NK_ConstantIntNode){}
+  MAKE_CLASSOF(NK_ConstantIntNode, NK_ConstantIntNode);
 };
 
 }  // namespace phoenix

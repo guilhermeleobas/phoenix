@@ -31,9 +31,11 @@ phoenix::Node* myParser(BasicBlock *BB, Value *V){
     if (isa<InsertElementInst>(I) ||
         isa<SelectInst>(I) ||
         isa<PHINode>(I) ||
-        isa<CallInst>(I) ||
-        isa<LoadInst>(I))
+        isa<CallInst>(I))
       return new phoenix::TerminalNode(I);
+
+    if (isa<LoadInst>(I))
+      return new phoenix::LoadNode(I);
 
 
     if (isa<BinaryOperator>(I) ||
@@ -48,14 +50,18 @@ phoenix::Node* myParser(BasicBlock *BB, Value *V){
     }
     else if (StoreInst *store = dyn_cast<StoreInst>(I)){
       phoenix::Node *node = myParser(BB, store->getValueOperand());
-      return new phoenix::UnaryNode(node, store);
+      if (phoenix::BinaryNode *binary = dyn_cast<phoenix::BinaryNode>(node)){
+        phoenix::TargetOpNode *top = new phoenix::TargetOpNode(binary);
+        return new phoenix::StoreNode(top, store);
+      }
+      else {
+        assert (0 && "store child must be a binary node!");
+      }
     }
   }
   else if (isa<Argument>(V)){
     return new phoenix::TerminalNode(V);
   }
-
-  errs() << isa<UnaryInstruction>(V) << ' ' << isa<StoreInst>(V) << "\n";
 
   std::string str = "Instruction not supported (parsing): ";
   llvm::raw_string_ostream rso(str);

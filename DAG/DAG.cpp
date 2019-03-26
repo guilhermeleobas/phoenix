@@ -47,15 +47,15 @@ bool DAG::runOnFunction(Function &F) {
     //   assert(0 && "Vector type");
     // }
 
-    phoenix::UnaryNode *node = (phoenix::UnaryNode*) myParser(g.get_store_inst());
+    phoenix::UnaryNode *store = (phoenix::UnaryNode*) myParser(g.get_store_inst());
 
     DotVisitor t;
-    ConstraintVisitor cv(node);
+    ConstraintVisitor cv(store);
 
-    node->accept(cv);
+    store->accept(cv);
+    store->accept(t);
 
-    // node->accept(t);
-    // t.print();
+    t.print();
 
     // dumpExpression(node);
     // dumpDot(node);
