@@ -66,14 +66,11 @@ class ConstraintVisitor : public Visitor {
  public:
   constraintValue id;
 
-  ConstraintVisitor(const phoenix::UnaryNode *unary) {
+  ConstraintVisitor(phoenix::StoreNode *store) {
     // One first call this Constraint with the unary being a store instruction
     // Let's make sure this happens
-    assert(isa<StoreInst>(unary->getInst()));
-
-    phoenix::Node *child = unary->child;
+    phoenix::Node *child = store->child;
     id = getIdentity(child->getInst());
-
   }
 
   void visit(phoenix::StoreNode *store) override {

@@ -52,7 +52,7 @@ int getLineNo(Value *V);
 // };
 
 
-class Node: public ConstraintFlag {
+class Node: public Constraint {
  public:
   enum NodeKind {
     NK_UnaryNode,
