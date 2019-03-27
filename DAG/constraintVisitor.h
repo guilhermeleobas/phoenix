@@ -67,8 +67,6 @@ class ConstraintVisitor : public Visitor {
   constraintValue id;
 
   ConstraintVisitor(phoenix::StoreNode *store) {
-    // One first call this Constraint with the unary being a store instruction
-    // Let's make sure this happens
     phoenix::Node *child = store->child;
     id = getIdentity(child->getInst());
   }
