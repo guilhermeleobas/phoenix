@@ -150,49 +150,29 @@ Optional<GetElementPtrInst *> Identify::check_op(LoadInst *li,
   return op_gep;
 }
 
-// Iterate backwards to see if v was produced by a load
-// Only iterate on instructions on the same basic block
-// std::vector<LoadInst *> Identify::find_load_inst(Instruction *I, Value *v) {
-//   assert(isa<Instruction>(v));
+// Iterate backwards to find a LoadInst from the instruction *I
+// Notes:
+//  - We only iterate on instructions of the sabe BasicBlock of I
+//  - We only skip conversion operations: trunc, zext, sitofp, ...
+//
+// Question: Can one find two or more load insts walking backwards?
+// I tend to say that the answer is no! Because one apply early-cse
+// before this optimization. Therefore, if there are two or more loads
+// with the same GEP as pointer operands, early-cse would merge them!
+//
+LoadInst* Identify::find_load_inst(Value *V) {
 
-//   Instruction *target = dyn_cast<Instruction>(v);
+  if (LoadInst *load = dyn_cast<LoadInst>(V)){
+    return load;
+  }
+  else if (CastInst *cast = dyn_cast<CastInst>(V)){
+    assert(cast->getNumOperands() == 1);
+    return find_load_inst(cast->getOperand(0));
+  }
+  
+  return nullptr;
 
-//   if (I->getParent() != target->getParent()) {
-//     return std::vector<LoadInst *>();
-//   }
-
-//   stack<Instruction *> s;
-//   s.push(target);
-
-//   set<Instruction *> visited;
-//   std::vector<LoadInst *> vec;
-
-//   while (!s.empty()) {
-//     Instruction *aux = s.top();
-//     s.pop();
-
-//     if (LoadInst *load = dyn_cast<LoadInst>(aux)) {
-//       vec.push_back(load);
-//       continue;
-//     }
-
-//     for (unsigned i = 0; i < aux->getNumOperands(); ++i) {
-//       if (Instruction *other = dyn_cast<Instruction>(aux->getOperand(i))) {
-//         // Check if we are still in the same basic block
-//         // and if we already visited `other`
-//         if (other->getParent() != I->getParent() ||
-//             visited.find(other) != visited.end())
-//           continue;
-
-//         visited.insert(other);
-
-//         s.push(other);
-//       }
-//     }
-//   }
-
-//   return vec;
-// }
+}
 
 Optional<Geps> Identify::good_to_go(Instruction *I) {
   // Given I as:
@@ -257,29 +237,23 @@ Optional<Geps> Identify::good_to_go(Instruction *I) {
     return None;
   }
 
-  // if (!isa<GetElementPtrInst>((*store)->getPointerOperand()))
-  //   return None;
-
-  // GetElementPtrInst *dest_gep =
-  //     dyn_cast<GetElementPtrInst>((*store)->getPointerOperand());
-
   // Perform a check on both operands
   for (unsigned num_op = 0; num_op < 2; ++num_op) {
 
     // Check 3
-    if (!isa<LoadInst>(I->getOperand(num_op)))
+    LoadInst *load = find_load_inst(I->getOperand(num_op));
+    if (load == nullptr)
       continue;
-
-    LoadInst *load = dyn_cast<LoadInst>(I->getOperand(num_op));
 
     // Check 4: Same basic block
     if (load->getParent() != I->getParent())
       continue;
 
     // Check 5:
-    // GetElementPtrInst *dest_gep =
-    //     dyn_cast<GetElementPtrInst>((*store)->getPointerOperand());
     if (Optional<GetElementPtrInst *> op_gep = check_op(load, dest_gep)) {
+      errs() << "Store: " << **store << "\n";
+      errs() << "Encontrou load: " << *load << "\n";
+      errs() << "----\n";
       return Geps(dest_gep, *op_gep, *store, I, num_op + 1);
     }
 
@@ -293,15 +267,6 @@ Optional<Geps> Identify::good_to_go(Instruction *I) {
 llvm::SmallVector<Geps, 10> Identify::get_instructions_of_interest() {
   return instructions_of_interest;
 }
-
-// Gather information about I
-// unsigned Identify::calc_loop_depth(Instruction *I) {
-//   for (LoopInfo::iterator LIT = LI.begin(); LIT != LI.end(); ++LIT) {
-//     Loop* ll = *LIT;  
-//     ll->dump();
-//   }
-//   return 0;
-// }
 
 void Identify::set_loop_depth(LoopInfo *LI, Geps &g){
   BasicBlock *BB = g.get_instruction()->getParent();

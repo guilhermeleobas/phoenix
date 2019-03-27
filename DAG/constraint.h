@@ -46,32 +46,37 @@ struct constraintValue {
 
     return os;
   }
+
+  inline std::string to_string() const {
+    if (type == Type::Null)
+      return "";
+    else if (type == Type::Int)
+      return std::to_string(intValue);
+    else
+      return std::to_string(doubleValue);
+  }
 };
 
-class Constraint {
+
+class Constraint{
  private:
-  constraintValue cons;
+  constraintValue *c = nullptr;
 
  public:
-  Constraint(){}
 
-  void setConstraint(const constraintValue &c){
-    cons = c;
+  void setConstraint(constraintValue *c) {
+    this->c = c;
   }
 
-  std::string color() const{
-    if (cons.type == constraintValue::Type::Null)
-      return "black";
-    
-    return "blue";
+  constraintValue* getConstraint(void) const {
+    return c;
   }
 
-  std::string label(void) const {
-    if (cons.type == constraintValue::Type::Null)
-      return "";
-    else if (cons.type == constraintValue::Type::Int)
-      return std::to_string(cons.intValue);
-    else
-      return std::to_string(cons.doubleValue);
+  bool hasConstraint(void) const {
+    return c != nullptr;
+  }
+
+  std::string label() const {
+    return (c != nullptr) ? c->to_string() : "";
   }
 };

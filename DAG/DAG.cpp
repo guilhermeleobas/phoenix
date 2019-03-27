@@ -41,13 +41,14 @@ bool DAG::runOnFunction(Function &F) {
     Instruction *I = g.get_instruction();
 
     // sanity check for vector instructions
-    // if (I->getOperand(0)->getType()->isVectorTy() ||
-    //     I->getOperand(1)->getType()->isVectorTy()){
-    //   errs() << *I << "\n";
-    //   assert(0 && "Vector type");
-    // }
+    if (I->getOperand(0)->getType()->isVectorTy() ||
+        I->getOperand(1)->getType()->isVectorTy()){
+      continue;
+      // errs() << *I << "\n";
+      // assert(0 && "Vector type");
+    }
 
-    phoenix::UnaryNode *store = (phoenix::UnaryNode*) myParser(g.get_store_inst());
+    phoenix::StoreNode *store = cast<phoenix::StoreNode>(myParser(g.get_store_inst()));
 
     DotVisitor t;
     ConstraintVisitor cv(store);

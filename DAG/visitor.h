@@ -18,14 +18,14 @@ namespace phoenix{
 class Visitor{
 
  public:
-  virtual void visit(phoenix::UnaryNode*){}
-  virtual void visit(phoenix::StoreNode*){}
-  virtual void visit(phoenix::BinaryNode*){}
-  virtual void visit(phoenix::TargetOpNode*){}
-  virtual void visit(phoenix::TerminalNode*){}
-  virtual void visit(phoenix::LoadNode*){}
-  virtual void visit(phoenix::ForeignNode*){}
-  virtual void visit(phoenix::ConstantNode*){}
-  virtual void visit(phoenix::ConstantIntNode*){}
+  virtual void visit(phoenix::UnaryNode*) = 0;
+  virtual void visit(phoenix::StoreNode*) = 0;
+  virtual void visit(phoenix::BinaryNode*) = 0;
+  virtual void visit(phoenix::TargetOpNode*) = 0;
+  virtual void visit(phoenix::TerminalNode*) = 0;
+  virtual void visit(phoenix::LoadNode*) = 0;
+  virtual void visit(phoenix::ForeignNode*) = 0;
+  virtual void visit(phoenix::ConstantNode*) = 0;
+  virtual void visit(phoenix::ConstantIntNode*) = 0;
 
 };

@@ -17,8 +17,6 @@ using namespace llvm;
 
 phoenix::Node* myParser(BasicBlock *BB, Value *V){
 
-  // errs() << "Value: " << *V << "\n";
-
   if (Constant *C = dyn_cast<Constant>(V)){
     if (isa<ConstantInt>(C))
       return new phoenix::ConstantIntNode(C);
@@ -74,13 +72,3 @@ phoenix::Node* myParser(BasicBlock *BB, Value *V){
 phoenix::Node* myParser(Instruction *I){
   return myParser(I->getParent(), I);
 }
-
-// void dumpExpression(phoenix::Node *node){
-//   errs() << node->toString() << "\n";
-// }
-
-// void dumpDot(phoenix::Node *node){
-//   errs() << "digraph G {\n"; 
-//   node->toDot();
-//   errs() << "}\n";
-// }

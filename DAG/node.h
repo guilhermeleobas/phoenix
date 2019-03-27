@@ -23,7 +23,7 @@ namespace phoenix {
 
 #define MAKE_CLASSOF(nk_begin, nk_end)    \
   static bool classof(const Node *node) { \
-    return node->getKind() >= nk_begin || \
+    return node->getKind() >= nk_begin && \
            node->getKind() <= nk_end;     \
   }                                       \
 
@@ -52,7 +52,7 @@ int getLineNo(Value *V);
 // };
 
 
-class Node: public Constraint {
+class Node: public ConstraintFlag {
  public:
   enum NodeKind {
     NK_UnaryNode,
@@ -141,7 +141,7 @@ class BinaryNode : public Node {
 class TargetOpNode : public BinaryNode {
  public:
   TargetOpNode(BinaryNode *binary) : BinaryNode(binary->left, binary->right, binary->getInst(), NK_TargetOpNode){
-    assert((isa<LoadNode>(right) || isa<LoadNode>(left)) && "Either `left` or `right` must be a LoadNode!");
+    assert(((isa<LoadNode>(right) || isa<LoadNode>(left))) && "Either `left` or `right` must be a LoadNode!");
   }
 
   LoadNode* getLoad(void) const {
@@ -181,6 +181,7 @@ class ConstantNode : public TerminalNode {
  public:
   ConstantNode(Constant *C) : TerminalNode(C, NK_ConstantNode){}
   ConstantNode(Constant *C, NodeKind Kind) : TerminalNode(C, Kind){}
+
   MAKE_CLASSOF(NK_ConstantNode, NK_ConstantNode);
 };
 

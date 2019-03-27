@@ -44,6 +44,11 @@ using namespace llvm;
   + " color = " + QUOTE(color) \
   + "]" \
 
+#define COLOR(node) \
+  (node->hasConstraint() ? "blue" : "black")
+
+#define LABEL(node) \
+  (node->hasConstraint() ? node->getConstraint()->to_string() : "")
 
 
 class DotVisitor : public Visitor {
@@ -90,7 +95,7 @@ class DotVisitor : public Visitor {
     }
   }
 
-  std::string ID(std::string s){
+  std::string ID(const std::string &s){
     if (id.find(s) == id.end())
       id[s] = id.size();
     return std::to_string(id[s]);
@@ -109,8 +114,8 @@ class DotVisitor : public Visitor {
 
     str += DIGRAPH_BEGIN;
 
-    str += NODE(idA, store->name(), store->color()) + "\n";
-    str += EDGE(idA, idB, store->label(), store->color()) + "\n";
+    str += NODE(idA, store->name(), COLOR(store)) + "\n";
+    str += EDGE(idA, idB, store->name(), COLOR(store)) + "\n";
 
     child->accept(*this);
 
@@ -122,8 +127,8 @@ class DotVisitor : public Visitor {
     std::string idA = ID(unary->name());
     std::string idB = ID(child->name());
 
-    str += NODE(idA, unary->name(), unary->color()) + "\n";
-    str += EDGE(idA, idB, unary->label(), unary->color()) + "\n";
+    str += NODE(idA, unary->name(), COLOR(unary)) + "\n";
+    str += EDGE(idA, idB, unary->label(), COLOR(unary)) + "\n";
 
     child->accept(*this);
   }
@@ -136,9 +141,9 @@ class DotVisitor : public Visitor {
     std::string idB = ID(left->name());
     std::string idC = ID(right->name());
 
-    str += NODE(idA, binary->name() + " = " + ENDL + get_symbol(I), binary->color()) + "\n";
-    str += EDGE(idA, idB, binary->label(), binary->color()) + "\n";
-    str += EDGE(idA, idC, binary->label(), binary->color()) + "\n";
+    str += NODE(idA, binary->name() + " = " + ENDL + get_symbol(I), COLOR(binary)) + "\n";
+    str += EDGE(idA, idB, binary->label(), COLOR(binary)) + "\n";
+    str += EDGE(idA, idC, binary->label(), COLOR(binary)) + "\n";
 
     left->accept(*this);
     right->accept(*this);
@@ -150,15 +155,25 @@ class DotVisitor : public Visitor {
 
   void visit(phoenix::TerminalNode *t) override {
     std::string labelA = ID(t->name());
-    if (isa<LoadInst>(t->getInst()))
-      str += NODE(labelA, "Load " + t->name(), t->color()) + "\n";
-    else
-      str += NODE(labelA, t->name(), t->color()) + "\n";
+    str += NODE(labelA, t->name(), COLOR(t)) + "\n";
+  }
+
+  void visit(phoenix::LoadNode *t) override {
+    std::string labelA = ID(t->name());
+    str += NODE(labelA, "Load " + t->name(), COLOR(t)) + "\n";
   }
 
   void visit(phoenix::ForeignNode *f) override {
     std::string labelA = ID(f->name());
     str += NODE(labelA, f->name(), "red") + "\n";
+  }
+  
+  void visit(phoenix::ConstantNode *cnt) override {
+    visit(cast<phoenix::TerminalNode>(cnt));
+  }
+
+  void visit(phoenix::ConstantIntNode *cnt) override {
+    visit(cast<phoenix::TerminalNode>(cnt));
   }
 
 };

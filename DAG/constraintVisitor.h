@@ -88,7 +88,7 @@ class ConstraintVisitor : public Visitor {
     constraintValue des = getDestructor(unary->getInst());
 
     if (des == id){
-      unary->setConstraint(id);
+      unary->setConstraint(&id);
       unary->child->accept(*this);
     }
 
@@ -101,7 +101,7 @@ class ConstraintVisitor : public Visitor {
     constraintValue des = getDestructor(binary->getInst());
 
     if (des == id){
-      binary->setConstraint(id);
+      binary->setConstraint(&id);
       binary->left->accept(*this);
       binary->right->accept(*this);
     }
@@ -113,10 +113,22 @@ class ConstraintVisitor : public Visitor {
   }
 
   void visit(phoenix::TerminalNode *term) override {
-    term->setConstraint(id);
+    term->setConstraint(&id);
+  }
+  
+  void visit(phoenix::LoadNode *load) override {
+    visit(cast<phoenix::TerminalNode>(load));
   }
 
   void visit(phoenix::ForeignNode *f) override {
     return;
+  }
+
+  void visit(phoenix::ConstantNode *c) override {
+    visit(cast<phoenix::TerminalNode>(c));
+  }
+
+  void visit(phoenix::ConstantIntNode *c) override {
+    visit(cast<phoenix::TerminalNode>(c));
   }
 };

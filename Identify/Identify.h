@@ -17,8 +17,8 @@ private:
   // because they don't have an identity.
   bool is_arith_inst_of_interest(Instruction *I);
 
-  // Find a LoadInst that can reach the value *v
-  std::vector<LoadInst*> find_load_inst(Instruction *I, Value *v);
+  // Find a LoadInst from *I
+  LoadInst* find_load_inst(Value *V);
 
   // Check if the current instruction I can reach a store following the control
   // flow graph. Note that I must pass the `is_arith_inst_of_interest` test
