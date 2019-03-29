@@ -47,13 +47,12 @@ using namespace llvm;
 #define COLOR(node) \
   (node->hasConstraint() ? "blue" : "black")
 
-#define LABEL(node) \
-  (node->hasConstraint() ? node->getConstraint()->to_string() : "")
+#define ID(node) \
+  (std::to_string(node->getID()))
 
 
 class DotVisitor : public Visitor {
  private:
-  std::map<std::string, unsigned> id;
   std::string str;
 
   std::string get_symbol(Instruction *I) {
@@ -95,13 +94,11 @@ class DotVisitor : public Visitor {
     }
   }
 
-  std::string ID(const std::string &s){
-    if (id.find(s) == id.end())
-      id[s] = id.size();
-    return std::to_string(id[s]);
-  }
-
  public:
+  
+  DotVisitor(phoenix::StoreNode *store){
+    store->accept(*this);
+  }
 
   void print(void) const {
     errs() << str << "\n";
@@ -109,13 +106,13 @@ class DotVisitor : public Visitor {
 
   void visit(phoenix::StoreNode *store) override {
     phoenix::Node *child = store->child;
-    std::string idA = ID(store->name());
-    std::string idB = ID(child->name());
+    std::string idA = ID(store);
+    std::string idB = ID(child);
 
     str += DIGRAPH_BEGIN;
 
     str += NODE(idA, store->name(), COLOR(store)) + "\n";
-    str += EDGE(idA, idB, store->name(), COLOR(store)) + "\n";
+    str += EDGE(idA, idB, "", COLOR(store)) + "\n";
 
     child->accept(*this);
 
@@ -124,8 +121,8 @@ class DotVisitor : public Visitor {
 
   void visit(phoenix::UnaryNode *unary) override {
     phoenix::Node *child = unary->child;
-    std::string idA = ID(unary->name());
-    std::string idB = ID(child->name());
+    std::string idA = ID(unary);
+    std::string idB = ID(child);
 
     str += NODE(idA, unary->name(), COLOR(unary)) + "\n";
     str += EDGE(idA, idB, unary->label(), COLOR(unary)) + "\n";
@@ -137,9 +134,9 @@ class DotVisitor : public Visitor {
     phoenix::Node *left = binary->left, *right = binary->right;
 
     Instruction *I = binary->getInst();
-    std::string idA = ID(binary->name());
-    std::string idB = ID(left->name());
-    std::string idC = ID(right->name());
+    std::string idA = ID(binary);
+    std::string idB = ID(left);
+    std::string idC = ID(right);
 
     str += NODE(idA, binary->name() + " = " + ENDL + get_symbol(I), COLOR(binary)) + "\n";
     str += EDGE(idA, idB, binary->label(), COLOR(binary)) + "\n";
@@ -150,21 +147,34 @@ class DotVisitor : public Visitor {
   }
 
   void visit(phoenix::TargetOpNode *target) override {
-    visit(cast<phoenix::BinaryNode>(target));
+    phoenix::Node *other = target->getOther();
+    phoenix::LoadNode *load = target->getLoad();
+
+    Instruction *I = target->getInst();
+    std::string idA = ID(target);
+    std::string idB = ID(load);
+    std::string idC = ID(other);
+
+    str += NODE(idA, target->name() + " = " + ENDL + get_symbol(I), COLOR(target)) + "\n";
+    str += EDGE(idA, idB, "", "black") + "\n";
+    str += EDGE(idA, idC, target->label(), COLOR(target)) + "\n";
+
+    load->accept(*this);
+    other->accept(*this);
   }
 
   void visit(phoenix::TerminalNode *t) override {
-    std::string labelA = ID(t->name());
+    std::string labelA = ID(t);
     str += NODE(labelA, t->name(), COLOR(t)) + "\n";
   }
 
   void visit(phoenix::LoadNode *t) override {
-    std::string labelA = ID(t->name());
+    std::string labelA = ID(t);
     str += NODE(labelA, "Load " + t->name(), COLOR(t)) + "\n";
   }
 
   void visit(phoenix::ForeignNode *f) override {
-    std::string labelA = ID(f->name());
+    std::string labelA = ID(f);
     str += NODE(labelA, f->name(), "red") + "\n";
   }
   

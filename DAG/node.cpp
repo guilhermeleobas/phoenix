@@ -1,7 +1,7 @@
 #include "node.h"
 #include <algorithm>
 
-// int phoenix::Counter::ID = 0;
+int phoenix::Counter::ID = 0;
 
 std::string phoenix::getFileName(Instruction *I) {
   MDNode *Var = I->getMetadata("dbg");

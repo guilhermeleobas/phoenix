@@ -24,8 +24,311 @@
 #include "DAG.h"
 #include "dotVisitor.h"
 #include "constraintVisitor.h"
+#include "depthVisitor.h"
 
 #define DEBUG_TYPE "DAG"
+
+Value* DAG::get_identity(const Geps &g) {
+  Instruction *I = g.get_instruction();
+  switch (I->getOpcode()) {
+  case Instruction::Add:
+  case Instruction::Sub:
+  case Instruction::Xor:
+  //
+  case Instruction::Shl:
+  case Instruction::LShr:
+  case Instruction::AShr:
+    return ConstantInt::get(I->getType(), 0);
+  //
+  case Instruction::Mul:
+  case Instruction::UDiv:
+  case Instruction::SDiv:
+    return ConstantInt::get(I->getType(), 1);
+  //
+  case Instruction::FAdd:
+  case Instruction::FSub:
+    return ConstantFP::get(I->getType(), 0.0);
+  case Instruction::FMul:
+  case Instruction::FDiv:
+    return ConstantFP::get(I->getType(), 1.0);
+
+  case Instruction::And:
+  case Instruction::Or:
+    return g.get_p_before();
+  default:
+    std::string str = "Instruction not supported: ";
+    llvm::raw_string_ostream rso(str);
+    I->print(rso);
+    llvm_unreachable(str.c_str());
+  }
+}
+
+llvm::SmallVector<Instruction *, 10>
+DAG::mark_instructions_to_be_moved(StoreInst *store) {
+  std::queue<Instruction *> q;
+  llvm::SmallVector<Instruction *, 10> marked;
+
+  for (Value *v : store->operands()) {
+    if (Instruction *i = dyn_cast<Instruction>(v)) {
+      q.push(i);
+    }
+  }
+
+  marked.push_back(store);
+
+  while (!q.empty()) {
+    Instruction *v = q.front();
+    q.pop();
+
+    // Check if *v is only used in instructions already marked
+    bool all_marked =
+        std::all_of(begin(v->users()), end(v->users()), [&marked](Value *user) {
+          return find(marked, user) != marked.end();
+        });
+
+    if (!all_marked){
+      DEBUG(dbgs() << "-> Ignoring: " << *v << "\n");
+      continue;
+    }
+
+    // Insert v in the list of marked values and its operands in the queue
+    marked.push_back(v);
+
+    if (User *u = dyn_cast<User>(v)) {
+      for (Value *op : u->operands()) {
+        if (Instruction *inst = dyn_cast<Instruction>(op)) {
+          // restrict ourselves to instructions on the same basic block
+          if (v->getParent() != inst->getParent()){
+            DEBUG(dbgs() << "-> not in the same BB: " << *inst << "\n");
+            continue;
+          }
+
+          if (isa<PHINode>(inst))
+            continue;
+
+          q.push(inst);
+        }
+      }
+    }
+  }
+
+  return marked;
+}
+
+void DAG::move_marked_to_basic_block(
+    llvm::SmallVector<Instruction *, 10> &marked, Instruction *br) {
+  for (Instruction *inst : reverse(marked)) {
+    inst->moveBefore(br);
+  }
+}
+
+void DAG::move_from_prev_to_then(BasicBlock *BBPrev, BasicBlock *BBThen){
+  llvm::SmallVector<Instruction*, 10> list;
+
+  for (BasicBlock::reverse_iterator b = BBPrev->rbegin(), e = BBPrev->rend(); b != e; ++b){
+    Instruction *I = &*b;
+
+    if (isa<PHINode>(I) || isa<BranchInst>(I))
+      continue;
+
+    if (begin(I->users()) == end(I->users()))
+      continue;
+
+    // Move I from BBPrev to BBThen iff all users of I are in BBThen
+    //
+    // Def 1.
+    //  Program P is in SSA form. Therefore, I dominates all its users
+    // Def 2. 
+    //  We are iterating from the end of BBPrev to the beginning. Thus, this gives us the guarantee
+    //  that all users of I living in the same BB were previously visited.
+
+    bool can_move_I = std::all_of(begin(I->users()), end(I->users()), [&BBThen](User *U){
+      BasicBlock *parent = dyn_cast<Instruction>(U)->getParent();
+      return (parent == BBThen);
+    });
+
+    if (can_move_I){
+      DEBUG(dbgs() << "[BBPrev -> BBThen] " << *I << "\n");
+      --b;
+      I->moveBefore(BBThen->getFirstNonPHI());
+    }
+  }
+}
+
+void DAG::move_from_prev_to_end(BasicBlock *BBPrev, BasicBlock *BBThen, BasicBlock *BBEnd){
+  llvm::SmallVector<Instruction*, 10> marked;
+
+  for (BasicBlock::reverse_iterator b = BBPrev->rbegin(), e = BBPrev->rend(); b != e; ++b){
+    Instruction *I = &*b;
+
+    if (isa<PHINode>(I) || isa<BranchInst>(I))
+      continue;
+
+    if (begin(I->users()) == end(I->users()))
+      continue;
+
+    // Move I from BBPrev to BBEnd iff all users of I are in BBEnd. 
+    // 
+    // Def 1. 
+    //  The program is in SSA form
+    // Def 2.
+    //  We are iterating from the end of BBPrev to the beginning. 
+    // 
+    // Theorem: 
+    //  Given an I that **has only users on BBend**, moving it from BBPrev -> BBEnd doesn't
+    //  change the semanthics of the program P.
+    // 
+    // Proof:
+    //  Let's assume that moving I from BBPrev to BBEnd changes the semantics of P. If it changes,
+    //  there an instruction J that depends on I (is a user of I) and will be executed before I. There
+    //  are two cases that can happen:
+    //    J is in BBPrev: Because the program is in SSA form, I must dominate J. Therefore, to move I,
+    //      we had to move J before to BBEnd. 
+    //    J is in BBThen: Invalid. We don't move I if there is a user of it outside BBPrev.
+    //
+
+    bool can_move_I = std::all_of(begin(I->users()), end(I->users()), [&BBPrev, &BBThen, &BBEnd](User *U){
+      BasicBlock *BB = dyn_cast<Instruction>(U)->getParent();
+      return (BB != BBPrev) && (BB != BBThen);
+    });
+
+    if (can_move_I){
+      DEBUG(dbgs() << "[BBPrev -> BBEnd]" << *I << "\n");
+      --b;
+      I->moveBefore(BBEnd->getFirstNonPHI());
+    }
+  }
+}
+
+void DAG::insert_if(const Geps &g, const phoenix::Node *node) {
+
+  Value *v = node->getValue();
+  // Value *v = g.get_v();
+  StoreInst *store = g.get_store_inst();
+  IRBuilder<> Builder(store);
+
+  Value *cmp;
+
+  if (v->getType()->isFloatingPointTy()) {
+    cmp = Builder.CreateFCmpONE(v, node->getConstraint());
+  } else {
+    cmp = Builder.CreateICmpNE(v, node->getConstraint());
+  }
+
+  TerminatorInst *br = llvm::SplitBlockAndInsertIfThen(
+      cmp, dyn_cast<Instruction>(cmp)->getNextNode(), false);
+
+  BasicBlock *BBThen = br->getParent();
+  BasicBlock *BBPrev = BBThen->getSinglePredecessor();
+  BasicBlock *BBEnd = BBThen->getSingleSuccessor();
+
+  store->moveBefore(br);
+
+  llvm::SmallVector<Instruction *, 10> marked =
+    mark_instructions_to_be_moved(store);
+
+  for_each(marked, [](Instruction *inst) {
+    DEBUG(dbgs() << " Marked: " << *inst << "\n");
+  });
+
+  move_marked_to_basic_block(marked, br);
+
+  move_from_prev_to_then(BBPrev, BBThen);
+  move_from_prev_to_end(BBPrev, BBThen, BBEnd);
+}
+
+// This should check for cases where we can't insert an if. For instance,
+//   I: *p = *p + 1
+bool DAG::can_insert_if(Geps &g) {
+  // v is the operand that is not *p
+  if (Constant *c = dyn_cast<Constant>(g.get_v())) {
+    if (c != get_identity(g))
+      return false;
+
+    // I truly believe that instCombine previously spotted and removed any
+    // easy optimization involving identity, like:
+    //  I: *p = *p + 0
+    //  I: *p = *p * 1
+    // I am writting the code below just for the peace of mind
+
+    // We already know here that c == identity for the given operation.
+    // Let's just compare if c is in the correct spot. For instance, we can't
+    // optimize the instruction below.
+    //  I: *p = 0 - *p
+
+    unsigned v_pos = g.get_v_pos();
+    Instruction *I = g.get_instruction();
+
+    switch (I->getOpcode()) {
+    case Instruction::Add:
+    case Instruction::FAdd:
+    case Instruction::Mul:
+    case Instruction::FMul:
+    case Instruction::Xor:
+    case Instruction::And:
+    case Instruction::Or:
+      // Commutativity. The pos of v doesn't matter!
+      //  *p + v = v + *p
+      //  *p * v = v * *p
+      return true;
+    case Instruction::Sub:
+    case Instruction::FSub:
+    case Instruction::Shl:
+    case Instruction::LShr:
+    case Instruction::AShr:
+    case Instruction::UDiv:
+    case Instruction::SDiv:
+      // true only if v == SECOND:
+      //  *p - v != v - *p
+      //  *p/v != v/*p
+      return (v_pos == SECOND) ? true : false;
+    
+    default:
+      std::string str = "Error (can_insert_if): ";
+      llvm::raw_string_ostream rso(str);
+      I->print(rso);
+      llvm_unreachable(str.c_str());
+    }
+  }
+
+  return true;
+}
+
+// This should implement a cost model
+// Right now we only insert the `if` if the depth is >= threshold(1)
+// TO-DO: Use a more sophisticated solution
+bool DAG::worth_insert_if(Geps &g) {
+  if (g.get_loop_depth() >= threshold)
+    return true;
+
+  DEBUG(dbgs() << "skipping: " << *g.get_instruction() << "\n"
+    << " threshold " << g.get_loop_depth() << " is not greater than " << threshold << "\n\n");
+  return false;
+}
+
+bool DAG::filter_instructions(Geps &g){
+  Instruction *I = g.get_instruction();
+  
+  switch(I->getOpcode()){
+    case Instruction::Add:
+    case Instruction::FAdd:
+    case Instruction::Mul:
+    case Instruction::FMul:
+    case Instruction::Xor:
+    case Instruction::And:
+    case Instruction::Or:
+    case Instruction::Sub:
+    case Instruction::FSub:
+    case Instruction::Shl:
+    case Instruction::LShr:
+    case Instruction::AShr:
+    case Instruction::UDiv:
+    case Instruction::SDiv:
+      return true;
+    default:
+      return false;
+  }
+}
 
 bool DAG::runOnFunction(Function &F) {
 
@@ -50,19 +353,32 @@ bool DAG::runOnFunction(Function &F) {
 
     phoenix::StoreNode *store = cast<phoenix::StoreNode>(myParser(g.get_store_inst()));
 
-    DotVisitor t;
     ConstraintVisitor cv(store);
+    DepthVisitor dv(store);
 
-    store->accept(cv);
-    store->accept(t);
-
+    DotVisitor t(store);
     t.print();
 
-    // dumpExpression(node);
-    // dumpDot(node);
-    // errs() << "Height: " << node->getHeight() << "\n";
-    // static_cast<phoenix::StoreNode*>(node)->dumpDebugInfo();
-    // errs() << "\n";
+    std::set<phoenix::Node*> *s = dv.getSet();
+
+    for (auto node : *s){
+      errs() << *node->getInst() << "\n";
+      // filter_instructions => Filter arithmetic instructions
+      // can_insert_if       => Check for corner cases. i.e. in a SUB, the `v` 
+      //                        value must be on the right and side (*p = *p - v) 
+      //                        and not on the left (*p = v - *p)
+      // worth_insert_if     => Cost model
+      if (filter_instructions(g) && can_insert_if(g) && worth_insert_if(g)){
+        // print_gep(&F, g);
+        insert_if(g, node);
+        DEBUG(dbgs() << "\n");
+      }
+
+      break;
+    }
+
+    
+
   }
 
   return false;
@@ -76,3 +392,4 @@ void DAG::getAnalysisUsage(AnalysisUsage &AU) const {
 
 char DAG::ID = 0;
 static RegisterPass<DAG> X("DAG", "DAG pattern a = a OP b", false, false);
+

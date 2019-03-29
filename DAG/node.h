@@ -35,14 +35,14 @@ namespace phoenix {
 std::string getFileName(Instruction *I);
 int getLineNo(Value *V);
 
-// class Counter{
-//  public:
-//   static int ID;
-//   const int uniq;
-//  public:
-//   Counter(): uniq(ID++){}
-//   const int getID() const { return uniq; }
-// };
+class Counter{
+ private:
+  static int ID;
+  const int uniq;
+ public:
+  Counter(): uniq(ID++){}
+  const int getID() const { return uniq; }
+};
 
 // class Label: private Counter{
 //  public:
@@ -52,7 +52,7 @@ int getLineNo(Value *V);
 // };
 
 
-class Node: public Constraint {
+class Node: public Counter, public Constraint {
  public:
   enum NodeKind {
     NK_UnaryNode,
@@ -73,7 +73,7 @@ class Node: public Constraint {
   const NodeKind Kind;
 
  public:
-  Node(Value *V, NodeKind Kind): V(V), Kind(Kind) {}
+  Node(Value *V, NodeKind Kind): V(V), Kind(Kind), Counter() {}
   virtual ~Node() {}
 
   NodeKind getKind() const { return Kind; }
@@ -97,6 +97,10 @@ class Node: public Constraint {
       getValue()->getType()->print(rso);
       return type_str;
     }
+  }
+
+  bool operator < (const Node *other) const {
+    return getID() < other->getID();
   }
 
   virtual void accept(Visitor &v) = 0;
@@ -168,12 +172,15 @@ class LoadNode : public TerminalNode {
  public:
   LoadNode(Value *V) : TerminalNode(V, NK_LoadNode){}
   
+  MAKE_VISITABLE;
   MAKE_CLASSOF(NK_LoadNode, NK_LoadNode);
 };
 
 class ForeignNode : public TerminalNode {
  public:
   ForeignNode(Value *V) : TerminalNode(V, NK_ForeignNode){}
+
+  MAKE_VISITABLE;
   MAKE_CLASSOF(NK_ForeignNode, NK_ForeignNode);
 };
 
@@ -181,13 +188,16 @@ class ConstantNode : public TerminalNode {
  public:
   ConstantNode(Constant *C) : TerminalNode(C, NK_ConstantNode){}
   ConstantNode(Constant *C, NodeKind Kind) : TerminalNode(C, Kind){}
-
+  
+  MAKE_VISITABLE;
   MAKE_CLASSOF(NK_ConstantNode, NK_ConstantNode);
 };
 
 class ConstantIntNode : public ConstantNode {
  public:
   ConstantIntNode(Constant *C) : ConstantNode(C, NK_ConstantIntNode){}
+
+  MAKE_VISITABLE;
   MAKE_CLASSOF(NK_ConstantIntNode, NK_ConstantIntNode);
 };
 
