@@ -373,8 +373,6 @@ bool DAG::runOnFunction(Function &F) {
         insert_if(g, node);
         DEBUG(dbgs() << "\n");
       }
-
-      break;
     }
 
     
