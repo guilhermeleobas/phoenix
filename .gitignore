@@ -3,3 +3,4 @@ build/
 *.bc
 CMakeFiles/
 Analysis/Benchs/*
+.vscode
