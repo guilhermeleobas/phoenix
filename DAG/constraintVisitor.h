@@ -122,6 +122,10 @@ class ConstraintVisitor : public Visitor {
     return;
   }
 
+  void visit(phoenix::ArgumentNode *a) override {
+    return;
+  }
+
   void visit(phoenix::ConstantNode *c) override {
     visit(cast<phoenix::TerminalNode>(c));
   }

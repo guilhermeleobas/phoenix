@@ -58,7 +58,7 @@ phoenix::Node* myParser(BasicBlock *BB, Value *V){
     }
   }
   else if (isa<Argument>(V)){
-    return new phoenix::TerminalNode(V);
+    return new phoenix::ArgumentNode(V);
   }
 
   std::string str = "Instruction not supported (parsing): ";

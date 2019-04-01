@@ -11,6 +11,7 @@ namespace phoenix{
   class TerminalNode;
   class LoadNode;
   class ForeignNode;
+  class ArgumentNode;
   class ConstantNode;
   class ConstantIntNode;
 };
@@ -25,6 +26,7 @@ class Visitor{
   virtual void visit(phoenix::TerminalNode*) = 0;
   virtual void visit(phoenix::LoadNode*) = 0;
   virtual void visit(phoenix::ForeignNode*) = 0;
+  virtual void visit(phoenix::ArgumentNode*) = 0;
   virtual void visit(phoenix::ConstantNode*) = 0;
   virtual void visit(phoenix::ConstantIntNode*) = 0;
 

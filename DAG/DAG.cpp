@@ -356,18 +356,16 @@ bool DAG::runOnFunction(Function &F) {
     ConstraintVisitor cv(store);
     DepthVisitor dv(store);
 
-    std::set<phoenix::Node*> *s = dv.getSet();
+    std::set<phoenix::Node*, NodeCompare> *s = dv.getSet();
 
     for (auto node : *s){
-      // errs() << *node->getInst() << "\n";
       // filter_instructions => Filter arithmetic instructions
       // can_insert_if       => Check for corner cases. i.e. in a SUB, the `v` 
       //                        value must be on the right and side (*p = *p - v) 
       //                        and not on the left (*p = v - *p)
       // worth_insert_if     => Cost model
+
       if (filter_instructions(g) && can_insert_if(g) && worth_insert_if(g)){
-        // print_gep(&F, g);
-        errs() << "Inseriu if\n";
         insert_if(g, node);
       }
     }
@@ -376,7 +374,7 @@ bool DAG::runOnFunction(Function &F) {
     t.print();
 
     for (auto node : *s){
-      errs() << *node->getInst() << "\n";
+      errs() << *node << "\n";
     }
 
     

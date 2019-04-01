@@ -177,6 +177,11 @@ class DotVisitor : public Visitor {
     std::string labelA = ID(f);
     str += NODE(labelA, f->name(), "red") + "\n";
   }
+
+  void visit(phoenix::ArgumentNode *a) override {
+    std::string labelA = ID(a);
+    str += NODE(labelA, a->name(), "green") + "\n";
+  }
   
   void visit(phoenix::ConstantNode *cnt) override {
     visit(cast<phoenix::TerminalNode>(cnt));

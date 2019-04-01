@@ -56,16 +56,20 @@ class Node: public Counter, public Constraint {
  public:
   enum NodeKind {
     NK_UnaryNode,
-    NK_StoreNode,
+      NK_StoreNode,
+    NK_UnaryNode_End,
     
     NK_BinaryNode,
-    NK_TargetOpNode,
+      NK_TargetOpNode,
+    NK_BinaryNode_End,
 
     NK_TerminalNode,
-    NK_LoadNode,
-    NK_ForeignNode,
-    NK_ConstantNode,
-    NK_ConstantIntNode
+      NK_LoadNode,
+      NK_ForeignNode,
+      NK_ArgumentNode,
+      NK_ConstantNode,
+      NK_ConstantIntNode,
+    NK_TerminalNode_End,
   };
  private:
   Value *V;
@@ -99,8 +103,25 @@ class Node: public Counter, public Constraint {
     }
   }
 
-  bool operator < (const Node *other) const {
-    return getID() < other->getID();
+  unsigned distance(void) const {
+    if (!isa<Instruction>(V))
+      return -1;
+
+    Instruction *I = getInst();
+    BasicBlock *BB = I->getParent();
+    int i = 0;
+
+    for (auto &other : *BB){
+      if (I == &other)
+        return i;
+      
+      ++i;
+    }
+  }
+
+  friend llvm::raw_ostream& operator<<(llvm::raw_ostream& os, const Node &node){
+    os << *(node.getValue());
+    return os;
   }
 
   virtual void accept(Visitor &v) = 0;
@@ -115,7 +136,7 @@ class UnaryNode : public Node {
   UnaryNode(Node *child, Instruction *I, NodeKind Kind): child(child), Node(I, Kind){}
 
   MAKE_VISITABLE;
-  MAKE_CLASSOF(NK_UnaryNode, NK_StoreNode);
+  MAKE_CLASSOF(NK_UnaryNode, NK_UnaryNode_End);
 };
 
 class StoreNode : public UnaryNode {
@@ -138,7 +159,7 @@ class BinaryNode : public Node {
   BinaryNode(Node *left, Node *right, Instruction *I, NodeKind Kind): left(left), right(right), Node(I, Kind){}
 
   MAKE_VISITABLE;
-  MAKE_CLASSOF(NK_BinaryNode, NK_TargetOpNode);
+  MAKE_CLASSOF(NK_BinaryNode, NK_BinaryNode_End);
 
 };
 
@@ -165,7 +186,7 @@ class TerminalNode : public Node {
   TerminalNode(Value *V) : Node(V, NK_TerminalNode) {}
   TerminalNode(Value *V, NodeKind Kind) : Node(V, Kind) {}
   MAKE_VISITABLE;
-  MAKE_CLASSOF(NK_TerminalNode, NK_ConstantIntNode);
+  MAKE_CLASSOF(NK_TerminalNode, NK_TerminalNode_End);
 };
 
 class LoadNode : public TerminalNode {
@@ -182,6 +203,14 @@ class ForeignNode : public TerminalNode {
 
   MAKE_VISITABLE;
   MAKE_CLASSOF(NK_ForeignNode, NK_ForeignNode);
+};
+
+class ArgumentNode : public TerminalNode {
+ public:
+  ArgumentNode(Value *V) : TerminalNode(V, NK_ArgumentNode){}
+
+  MAKE_VISITABLE;
+  MAKE_CLASSOF(NK_ArgumentNode, NK_ArgumentNode);
 };
 
 class ConstantNode : public TerminalNode {
