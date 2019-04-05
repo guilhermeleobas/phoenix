@@ -29,12 +29,12 @@ phoenix::Node* myParser(BasicBlock *BB, Value *V){
     if (isa<InsertElementInst>(I) ||
         isa<SelectInst>(I) ||
         isa<PHINode>(I) ||
+        isa<GetElementPtrInst>(I) ||
         isa<CallInst>(I))
       return new phoenix::TerminalNode(I);
 
     if (isa<LoadInst>(I))
       return new phoenix::LoadNode(I);
-
 
     if (isa<BinaryOperator>(I) ||
         isa<CmpInst>(I)){
@@ -68,6 +68,7 @@ phoenix::Node* myParser(BasicBlock *BB, Value *V){
   std::string str = "Instruction not supported (parsing): ";
   llvm::raw_string_ostream rso(str);
   V->print(rso);
+  BB->print(rso);
   llvm_unreachable(str.c_str());
 
   return nullptr;

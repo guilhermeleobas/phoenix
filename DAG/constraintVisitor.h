@@ -3,6 +3,32 @@
 #include "visitor.h"
 #include "constraint.h"
 
+// Converts a constant of value *v(T) from type T -> t
+// This converts things such as float 0.0000 to int 0
+// and the other way around
+Value* convert(Value *v, Value *target){
+  // errs() << "Converting " << *v << " -> " << *target << "(" << *target->getType() << ")" << "\n";
+
+  if (v->getType()->isFloatingPointTy()){
+    // v => Float/Double
+    if (target->getType()->isFloatingPointTy()){
+      // target => Float/Double
+      return ConstantFP::get(target->getType(), 0.0);
+    }
+    // Target => Int
+    return ConstantInt::get(target->getType(), 0);
+  }
+  else {
+    // v => Int
+    if (target->getType()->isFloatingPointTy()){
+      // Target => Float/Double
+      return ConstantFP::get(target->getType(), 0.0);
+    }
+    // Target => Int
+    return ConstantInt::get(target->getType(), 0);
+  }
+}
+
 Value* getDestructor(Instruction *I){
   switch (I->getOpcode()) {
   case Instruction::Mul:
@@ -97,8 +123,14 @@ class ConstraintVisitor : public Visitor {
   }
 
   void visit(phoenix::CastNode *cast) override {
-    cast->setConstraint(id);
-    cast->child->accept(*this);
+    Instruction *I = cast->getInst();
+    Value *other = id;
+    // case Instruction::AddrSpaceCast:
+      cast->setConstraint(id);
+      id = convert(id, cast->child->getValue());
+      errs() << "id: " << *id << "\n";
+      cast->child->accept(*this);
+      id = other;
   }
 
   void visit(phoenix::BinaryNode *binary) override {

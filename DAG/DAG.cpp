@@ -366,18 +366,13 @@ bool DAG::runOnFunction(Function &F) {
       // worth_insert_if     => Cost model
 
       if (filter_instructions(g) && can_insert_if(g) && worth_insert_if(g)){
+        errs() << "Trying: " << *node << "\n";
         insert_if(g, node);
       }
     }
 
     DotVisitor t(store);
     t.print();
-
-    for (auto node : *s){
-      errs() << *node << "\n";
-    }
-
-    
 
   }
 
