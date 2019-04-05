@@ -4,6 +4,7 @@ namespace phoenix{
 	class Node;
 	class UnaryNode;
   class StoreNode;
+  class CastNode;
 
   class BinaryNode;
   class TargetOpNode;
@@ -21,6 +22,7 @@ class Visitor{
  public:
   virtual void visit(phoenix::UnaryNode*) = 0;
   virtual void visit(phoenix::StoreNode*) = 0;
+  virtual void visit(phoenix::CastNode*) = 0;
   virtual void visit(phoenix::BinaryNode*) = 0;
   virtual void visit(phoenix::TargetOpNode*) = 0;
   virtual void visit(phoenix::TerminalNode*) = 0;

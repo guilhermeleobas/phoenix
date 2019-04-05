@@ -130,6 +130,17 @@ class DotVisitor : public Visitor {
     child->accept(*this);
   }
 
+  void visit(phoenix::CastNode *cast) override {
+    phoenix::Node *child = cast->child;
+    std::string idA = ID(cast);
+    std::string idB = ID(child);
+
+    str += NODE(idA, cast->name() + " = " + cast->instType(), COLOR(cast)) + "\n";
+    str += EDGE(idA, idB, cast->label(), COLOR(cast)) + "\n";
+
+    child->accept(*this);
+  }
+
   void visit(phoenix::BinaryNode *binary) override {
     phoenix::Node *left = binary->left, *right = binary->right;
 
@@ -188,7 +199,8 @@ class DotVisitor : public Visitor {
   }
 
   void visit(phoenix::ConstantIntNode *cnt) override {
-    visit(cast<phoenix::TerminalNode>(cnt));
+    std::string labelA = ID(cnt);
+    str += NODE(labelA, cnt->name(), "purple") + "\n";
   }
 
 };

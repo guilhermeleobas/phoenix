@@ -353,7 +353,7 @@ bool DAG::runOnFunction(Function &F) {
 
     phoenix::StoreNode *store = cast<phoenix::StoreNode>(myParser(g.get_store_inst()));
 
-    ConstraintVisitor cv(store);
+    ConstraintVisitor cv(store, &g);
     DepthVisitor dv(store);
 
     std::set<phoenix::Node*, NodeCompare> *s = dv.getSet();

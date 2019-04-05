@@ -42,6 +42,10 @@ phoenix::Node* myParser(BasicBlock *BB, Value *V){
       phoenix::Node *right = myParser(BB, I->getOperand(1));
       return new phoenix::BinaryNode(left, right, I);
     }
+    else if (isa<CastInst>(I)){
+      phoenix::Node *node = myParser(BB, I->getOperand(0));
+      return new phoenix::CastNode(node, I);
+    }
     else if (isa<UnaryInstruction>(I)){
       phoenix::Node* node = myParser(BB, I->getOperand(0));
       return new phoenix::UnaryNode(node, I);

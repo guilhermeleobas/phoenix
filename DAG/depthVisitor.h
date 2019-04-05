@@ -38,6 +38,10 @@ class DepthVisitor : public Visitor {
     }
   }
 
+  void visit(phoenix::CastNode *cast) override {
+    cast->child->accept(*this);
+  }
+
   void visit(phoenix::BinaryNode *binary) override {
     if (!binary->hasConstraint())
       return;

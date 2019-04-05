@@ -1,7 +1,5 @@
 #pragma once
 
-#include <iostream>
-
 class Constraint{
  private:
   Value *v = nullptr;

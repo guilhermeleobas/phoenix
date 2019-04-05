@@ -57,6 +57,7 @@ class Node: public Counter, public Constraint {
   enum NodeKind {
     NK_UnaryNode,
       NK_StoreNode,
+      NK_CastNode,
     NK_UnaryNode_End,
     
     NK_BinaryNode,
@@ -117,6 +118,11 @@ class Node: public Counter, public Constraint {
       
       ++i;
     }
+
+    std::string str = "Instruction not found on BasicBlock: ";
+    llvm::raw_string_ostream rso(str);
+    I->print(rso);
+    llvm_unreachable(str.c_str());
   }
 
   friend llvm::raw_ostream& operator<<(llvm::raw_ostream& os, const Node &node){
@@ -137,6 +143,14 @@ class UnaryNode : public Node {
 
   MAKE_VISITABLE;
   MAKE_CLASSOF(NK_UnaryNode, NK_UnaryNode_End);
+};
+
+class CastNode : public UnaryNode {
+ public:
+  CastNode (Node *child, Instruction *I): UnaryNode(child, I, NK_CastNode){}
+
+  MAKE_VISITABLE;
+  MAKE_CLASSOF(NK_CastNode, NK_CastNode);
 };
 
 class StoreNode : public UnaryNode {
@@ -225,6 +239,11 @@ class ConstantNode : public TerminalNode {
 class ConstantIntNode : public ConstantNode {
  public:
   ConstantIntNode(Constant *C) : ConstantNode(C, NK_ConstantIntNode){}
+
+  std::string name(void) const {
+    ConstantInt *C = cast<ConstantInt>(getValue());
+    return std::to_string(C->getSExtValue());
+  }
 
   MAKE_VISITABLE;
   MAKE_CLASSOF(NK_ConstantIntNode, NK_ConstantIntNode);

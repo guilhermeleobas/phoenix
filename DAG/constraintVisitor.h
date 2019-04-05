@@ -10,11 +10,16 @@ Value* getDestructor(Instruction *I){
   case Instruction::SDiv:
   case Instruction::And:
     return ConstantInt::get(I->getType(), 0);
-    // return constraintValue(0);
   case Instruction::FMul:
   case Instruction::FDiv:
     return ConstantFP::get(I->getType(), 0.0);
-    // return constraintValue(0.0);
+  case Instruction::Shl:
+  case Instruction::LShr:
+  case Instruction::AShr:
+  case Instruction::Or:
+  case Instruction::Xor:
+    return nullptr;
+
   default:
     errs() << "No destructor for: " << *I << "\n";
     return nullptr;
@@ -26,7 +31,7 @@ Value* getDestructor(Instruction *I){
   }
 }
 
-Value* getIdentity(Instruction *I) {
+Value* getIdentity(Instruction *I, const Geps *g) {
   switch (I->getOpcode()) {
   case Instruction::Add:
   case Instruction::Sub:
@@ -35,7 +40,6 @@ Value* getIdentity(Instruction *I) {
   case Instruction::Shl:
   case Instruction::LShr:
   case Instruction::AShr:
-  case Instruction::And:
     return ConstantInt::get(I->getType(), 0);
   //
   case Instruction::Mul:
@@ -50,8 +54,9 @@ Value* getIdentity(Instruction *I) {
   case Instruction::FDiv:
     return ConstantFP::get(I->getType(), 1.0);
 
-  // case Instruction::Or:
-  //   return g.get_p_before();
+  case Instruction::And:
+  case Instruction::Or:
+    return g->get_p_before();
   default:
     std::string str = "Instruction not supported: ";
     llvm::raw_string_ostream rso(str);
@@ -66,9 +71,9 @@ class ConstraintVisitor : public Visitor {
   // constraintValue id;
   Value *id = nullptr;
 
-  ConstraintVisitor(phoenix::StoreNode *store) {
+  ConstraintVisitor(phoenix::StoreNode *store, const Geps *g) {
     phoenix::Node *child = store->child;
-    id = getIdentity(child->getInst());
+    id = getIdentity(child->getInst(), g);
     store->accept(*this);
   }
 
@@ -91,6 +96,11 @@ class ConstraintVisitor : public Visitor {
 
   }
 
+  void visit(phoenix::CastNode *cast) override {
+    cast->setConstraint(id);
+    cast->child->accept(*this);
+  }
+
   void visit(phoenix::BinaryNode *binary) override {
 
     // The same is valid here! One only propagates `id` iff
@@ -107,6 +117,21 @@ class ConstraintVisitor : public Visitor {
 
   void visit(phoenix::TargetOpNode *target) override {
     target->setConstraint(id);
+    
+    Instruction *I = target->getInst();
+
+    switch(I->getOpcode()){
+      case Instruction::Sub:
+      case Instruction::FSub:
+      case Instruction::Shl:
+      case Instruction::LShr:
+      case Instruction::AShr:
+      case Instruction::UDiv:
+      case Instruction::SDiv:
+        if (isa<phoenix::LoadNode>(target->right))
+          return;
+    }
+
     target->getOther()->accept(*this);
   }
 
@@ -127,10 +152,12 @@ class ConstraintVisitor : public Visitor {
   }
 
   void visit(phoenix::ConstantNode *c) override {
-    visit(cast<phoenix::TerminalNode>(c));
+    if (id == c->getValue())
+      c->setConstraint(id);
   }
 
   void visit(phoenix::ConstantIntNode *c) override {
-    visit(cast<phoenix::TerminalNode>(c));
+    if (id == c->getValue())
+      c->setConstraint(id);
   }
 };
