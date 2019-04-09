@@ -8,6 +8,8 @@
 // and the other way around
 Value* convert(Value *v, Value *target){
   // errs() << "Converting " << *v << " -> " << *target << "(" << *target->getType() << ")" << "\n";
+  if (!target->getType()->isFloatingPointTy() and !target->getType()->isIntegerTy())
+    return nullptr;
 
   if (v->getType()->isFloatingPointTy()){
     // v => Float/Double
@@ -124,13 +126,14 @@ class ConstraintVisitor : public Visitor {
 
   void visit(phoenix::CastNode *cast) override {
     Instruction *I = cast->getInst();
-    Value *other = id;
-    // case Instruction::AddrSpaceCast:
-      cast->setConstraint(id);
-      id = convert(id, cast->child->getValue());
-      errs() << "id: " << *id << "\n";
+    cast->setConstraint(id);
+    Value *conv = convert(id, cast->child->getValue());
+    if (conv != nullptr){
+      Value *other = id;
+      id = conv;
       cast->child->accept(*this);
       id = other;
+    }
   }
 
   void visit(phoenix::BinaryNode *binary) override {
