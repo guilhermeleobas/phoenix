@@ -129,6 +129,7 @@ bool Identify::can_insert_if(const Geps &g) {
   case Instruction::AShr:
   case Instruction::UDiv:
   case Instruction::SDiv:
+  case Instruction::FDiv:
     // true only if v == SECOND:
     //  *p - v != v - *p
     //  *p/v != v/*p
