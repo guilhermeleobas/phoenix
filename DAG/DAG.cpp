@@ -290,8 +290,6 @@ bool DAG::runOnFunction(Function &F) {
   if (gs.size() > 0)
     errs() << "-> #Instructions of interest (" << F.getName() << "): " << gs.size() << "\n";
 
-  bool check = false;
-
   // Let's give an id for each instruction of interest
   for (auto &g : gs) {
     Instruction *I = g.get_instruction();
@@ -320,7 +318,7 @@ bool DAG::runOnFunction(Function &F) {
       // filter_instructions => Filter arithmetic instructions
       // worth_insert_if     => Cost model
 
-      if (check && filter_instructions(g) && worth_insert_if(g)){
+      if (filter_instructions(g) && worth_insert_if(g)){
         errs() << "Trying: " << *node << "\n";
         insert_if(g, node);
       }
@@ -332,7 +330,6 @@ bool DAG::runOnFunction(Function &F) {
     if (s->size() > 0)
       errs() << "\n";
 
-    check = true;
   }
   
   if (gs.size() > 0)
