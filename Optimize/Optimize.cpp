@@ -232,7 +232,7 @@ void Optimize::insert_if(const Geps &g) {
   // move_marked_to_basic_block(marked, br);
 
   move_from_prev_to_then(BBPrev, BBThen);
-  move_from_prev_to_end(BBPrev, BBThen, BBEnd);
+  // move_from_prev_to_end(BBPrev, BBThen, BBEnd);
 }
 // This should implement a cost model
 // Right now we only insert the `if` if the depth is >= threshold(1)
