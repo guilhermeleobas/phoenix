@@ -16,7 +16,6 @@ private:
   llvm::SmallVector<Instruction *, 10> mark_instructions_to_be_moved(StoreInst *init);
   void insert_if(const Geps &g);
 
-  bool can_insert_if(Geps &g);
   bool worth_insert_if(Geps &g);
   bool filter_instructions(Geps &g);
   

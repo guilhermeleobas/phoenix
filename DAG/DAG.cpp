@@ -186,6 +186,8 @@ void DAG::move_from_prev_to_end(BasicBlock *BBPrev, BasicBlock *BBThen, BasicBlo
     //      we had to move J before to BBEnd. 
     //    J is in BBThen: Invalid. We don't move I if there is a user of it outside BBPrev.
     //
+    // NOTE: THIS PROOF IS COMPLETELY WRONG!!! WE HAVE MEMORY ALIASING!!!!
+    
 
     bool can_move_I = std::all_of(begin(I->users()), end(I->users()), [&BBPrev, &BBThen, &BBEnd](User *U){
       BasicBlock *BB = dyn_cast<Instruction>(U)->getParent();
@@ -234,64 +236,7 @@ void DAG::insert_if(const Geps &g, const phoenix::Node *node) {
   move_marked_to_basic_block(marked, br);
 
   move_from_prev_to_then(BBPrev, BBThen);
-  move_from_prev_to_end(BBPrev, BBThen, BBEnd);
-}
-
-// This should check for cases where we can't insert an if. For instance,
-//   I: *p = *p + 1
-bool DAG::can_insert_if(Geps &g) {
-  // v is the operand that is not *p
-  if (Constant *c = dyn_cast<Constant>(g.get_v())) {
-    if (c != get_identity(g))
-      return false;
-
-    // I truly believe that instCombine previously spotted and removed any
-    // easy optimization involving identity, like:
-    //  I: *p = *p + 0
-    //  I: *p = *p * 1
-    // I am writting the code below just for the peace of mind
-
-    // We already know here that c == identity for the given operation.
-    // Let's just compare if c is in the correct spot. For instance, we can't
-    // optimize the instruction below.
-    //  I: *p = 0 - *p
-
-    unsigned v_pos = g.get_v_pos();
-    Instruction *I = g.get_instruction();
-
-    switch (I->getOpcode()) {
-    case Instruction::Add:
-    case Instruction::FAdd:
-    case Instruction::Mul:
-    case Instruction::FMul:
-    case Instruction::Xor:
-    case Instruction::And:
-    case Instruction::Or:
-      // Commutativity. The pos of v doesn't matter!
-      //  *p + v = v + *p
-      //  *p * v = v * *p
-      return true;
-    case Instruction::Sub:
-    case Instruction::FSub:
-    case Instruction::Shl:
-    case Instruction::LShr:
-    case Instruction::AShr:
-    case Instruction::UDiv:
-    case Instruction::SDiv:
-      // true only if v == SECOND:
-      //  *p - v != v - *p
-      //  *p/v != v/*p
-      return (v_pos == SECOND) ? true : false;
-    
-    default:
-      std::string str = "Error (can_insert_if): ";
-      llvm::raw_string_ostream rso(str);
-      I->print(rso);
-      llvm_unreachable(str.c_str());
-    }
-  }
-
-  return true;
+  // move_from_prev_to_end(BBPrev, BBThen, BBEnd);
 }
 
 // This should implement a cost model
@@ -339,6 +284,14 @@ bool DAG::runOnFunction(Function &F) {
 
   llvm::SmallVector<Geps, 10> gs = Idn->get_instructions_of_interest();
 
+  if (F.getName() != "cftfsub")
+    return false;
+
+  if (gs.size() > 0)
+    errs() << "-> #Instructions of interest (" << F.getName() << "): " << gs.size() << "\n";
+
+  bool check = false;
+
   // Let's give an id for each instruction of interest
   for (auto &g : gs) {
     Instruction *I = g.get_instruction();
@@ -355,26 +308,35 @@ bool DAG::runOnFunction(Function &F) {
 
     ConstraintVisitor cv(store, &g);
     DepthVisitor dv(store);
+    DotVisitor t(store);
+    // t.print();
 
     std::set<phoenix::Node*, NodeCompare> *s = dv.getSet();
+    if (s->size() > 0){
+      errs() << "#Set (" << F.getName() << "): " << s->size() << "\n";
+    }
 
     for (auto node : *s){
       // filter_instructions => Filter arithmetic instructions
-      // can_insert_if       => Check for corner cases. i.e. in a SUB, the `v` 
-      //                        value must be on the right and side (*p = *p - v) 
-      //                        and not on the left (*p = v - *p)
       // worth_insert_if     => Cost model
 
-      if (filter_instructions(g) && can_insert_if(g) && worth_insert_if(g)){
+      if (check && filter_instructions(g) && worth_insert_if(g)){
         errs() << "Trying: " << *node << "\n";
         insert_if(g, node);
       }
+      else {
+        errs() << "Skipping: " << *node << "\n";
+      }
     }
 
-    DotVisitor t(store);
-    t.print();
+    if (s->size() > 0)
+      errs() << "\n";
 
+    check = true;
   }
+  
+  if (gs.size() > 0)
+    errs() << "<- \n";
 
   return false;
 }

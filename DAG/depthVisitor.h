@@ -23,7 +23,8 @@ class DepthVisitor : public Visitor {
  private:
 
   void visit(phoenix::StoreNode *store) override {
-    store->child->accept(*this);
+    if (store->child->hasConstraint())
+      store->child->accept(*this);
   }
 
   void visit(phoenix::UnaryNode *unary) override {

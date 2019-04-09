@@ -54,6 +54,96 @@ bool Identify::is_arith_inst_of_interest(Instruction *I) {
   }
 }
 
+Value *Identify::get_identity(const Geps &g) {
+  Instruction *I = g.get_instruction();
+  switch (I->getOpcode()) {
+  case Instruction::Add:
+  case Instruction::Sub:
+  case Instruction::Xor:
+  //
+  case Instruction::Shl:
+  case Instruction::LShr:
+  case Instruction::AShr:
+    return ConstantInt::get(I->getType(), 0);
+  //
+  case Instruction::Mul:
+  case Instruction::UDiv:
+  case Instruction::SDiv:
+    return ConstantInt::get(I->getType(), 1);
+  //
+  case Instruction::FAdd:
+  case Instruction::FSub:
+    return ConstantFP::get(I->getType(), 0.0);
+  case Instruction::FMul:
+  case Instruction::FDiv:
+    return ConstantFP::get(I->getType(), 1.0);
+
+  case Instruction::And:
+  case Instruction::Or:
+    return g.get_p_before();
+  default:
+    std::string str = "Instruction not supported: ";
+    llvm::raw_string_ostream rso(str);
+    I->print(rso);
+    llvm_unreachable(str.c_str());
+  }
+}
+
+bool Identify::can_insert_if(const Geps &g) {
+  // v is the operand that is not *p
+  if (Constant *c = dyn_cast<Constant>(g.get_v())) {
+    if (c != get_identity(g))
+      return false;
+  }
+
+  // I truly believe that instCombine previously spotted and removed any
+  // easy optimization involving identity, like:
+  //  I: *p = *p + 0
+  //  I: *p = *p * 1
+  // I am writting the code below just for the peace of mind
+
+  // We already know here that c == identity for the given operation.
+  // Let's just compare if c is in the correct spot. For instance, we can't
+  // optimize the instruction below.
+  //  I: *p = 0 - *p
+
+  unsigned v_pos = g.get_v_pos();
+  Instruction *I = g.get_instruction();
+
+  switch (I->getOpcode()) {
+  case Instruction::Add:
+  case Instruction::FAdd:
+  case Instruction::Mul:
+  case Instruction::FMul:
+  case Instruction::Xor:
+  case Instruction::And:
+  case Instruction::Or:
+    // Commutativity. The pos of v doesn't matter!
+    //  *p + v = v + *p
+    //  *p * v = v * *p
+    return true;
+  case Instruction::Sub:
+  case Instruction::FSub:
+  case Instruction::Shl:
+  case Instruction::LShr:
+  case Instruction::AShr:
+  case Instruction::UDiv:
+  case Instruction::SDiv:
+    // true only if v == SECOND:
+    //  *p - v != v - *p
+    //  *p/v != v/*p
+    return (v_pos == SECOND) ? true : false;
+  
+  default:
+    std::string str = "Error (can_insert_if): ";
+    llvm::raw_string_ostream rso(str);
+    I->print(rso);
+    llvm_unreachable(str.c_str());
+  }
+
+  return true;
+}
+
 //
 
 Optional<StoreInst *> Identify::can_reach_store(Instruction *I) {
@@ -281,7 +371,9 @@ bool Identify::runOnFunction(Function &F) {
   for (auto &BB : F) {
     for (auto &I : BB) {
       if (Optional<Geps> g = good_to_go(&I)) {
-        instructions_of_interest.push_back(*g);
+        if (can_insert_if(*g)){
+          instructions_of_interest.push_back(*g);
+        }
       }
     }
   }

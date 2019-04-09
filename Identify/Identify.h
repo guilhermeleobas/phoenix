@@ -17,6 +17,9 @@ private:
   // because they don't have an identity.
   bool is_arith_inst_of_interest(Instruction *I);
 
+  Value* get_identity(const Geps &g);
+  bool can_insert_if(const Geps &g);
+
   // Find a LoadInst from *I
   LoadInst* find_load_inst(Value *V);
 

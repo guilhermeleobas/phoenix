@@ -234,64 +234,6 @@ void Optimize::insert_if(const Geps &g) {
   move_from_prev_to_then(BBPrev, BBThen);
   move_from_prev_to_end(BBPrev, BBThen, BBEnd);
 }
-
-// This should check for cases where we can't insert an if. For instance,
-//   I: *p = *p + 1
-bool Optimize::can_insert_if(Geps &g) {
-  // v is the operand that is not *p
-  if (Constant *c = dyn_cast<Constant>(g.get_v())) {
-    if (c != get_identity(g))
-      return false;
-
-    // I truly believe that instCombine previously spotted and removed any
-    // easy optimization involving identity, like:
-    //  I: *p = *p + 0
-    //  I: *p = *p * 1
-    // I am writting the code below just for the peace of mind
-
-    // We already know here that c == identity for the given operation.
-    // Let's just compare if c is in the correct spot. For instance, we can't
-    // optimize the instruction below.
-    //  I: *p = 0 - *p
-
-    unsigned v_pos = g.get_v_pos();
-    Instruction *I = g.get_instruction();
-
-    switch (I->getOpcode()) {
-    case Instruction::Add:
-    case Instruction::FAdd:
-    case Instruction::Mul:
-    case Instruction::FMul:
-    case Instruction::Xor:
-    case Instruction::And:
-    case Instruction::Or:
-      // Commutativity. The pos of v doesn't matter!
-      //  *p + v = v + *p
-      //  *p * v = v * *p
-      return true;
-    case Instruction::Sub:
-    case Instruction::FSub:
-    case Instruction::Shl:
-    case Instruction::LShr:
-    case Instruction::AShr:
-    case Instruction::UDiv:
-    case Instruction::SDiv:
-      // true only if v == SECOND:
-      //  *p - v != v - *p
-      //  *p/v != v/*p
-      return (v_pos == SECOND) ? true : false;
-    
-    default:
-      std::string str = "Error (can_insert_if): ";
-      llvm::raw_string_ostream rso(str);
-      I->print(rso);
-      llvm_unreachable(str.c_str());
-    }
-  }
-
-  return true;
-}
-
 // This should implement a cost model
 // Right now we only insert the `if` if the depth is >= threshold(1)
 // TO-DO: Use a more sophisticated solution
@@ -367,7 +309,7 @@ bool Optimize::runOnFunction(Function &F) {
     //                        value must be on the right and side (*p = *p - v) 
     //                        and not on the left (*p = v - *p)
     // worth_insert_if     => Cost model
-    if (filter_instructions(g) && can_insert_if(g) && worth_insert_if(g)){
+    if (filter_instructions(g) && worth_insert_if(g)){
       print_gep(&F, g);
       insert_if(g);
       DEBUG(dbgs() << "\n");

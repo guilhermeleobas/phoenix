@@ -148,7 +148,6 @@ class ConstraintVisitor : public Visitor {
   }
 
   void visit(phoenix::TargetOpNode *target) override {
-    target->setConstraint(id);
     
     Instruction *I = target->getInst();
 
@@ -160,9 +159,12 @@ class ConstraintVisitor : public Visitor {
       case Instruction::AShr:
       case Instruction::UDiv:
       case Instruction::SDiv:
-        if (isa<phoenix::LoadNode>(target->right))
+        if (isa<phoenix::LoadNode>(target->right)){
           return;
+        }
     }
+
+    target->setConstraint(id);
 
     target->getOther()->accept(*this);
   }
