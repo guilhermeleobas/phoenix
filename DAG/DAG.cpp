@@ -284,9 +284,6 @@ bool DAG::runOnFunction(Function &F) {
 
   llvm::SmallVector<Geps, 10> gs = Idn->get_instructions_of_interest();
 
-  if (F.getName() != "cftfsub")
-    return false;
-
   if (gs.size() > 0)
     errs() << "-> #Instructions of interest (" << F.getName() << "): " << gs.size() << "\n";
 
