@@ -284,8 +284,8 @@ bool DAG::runOnFunction(Function &F) {
 
   llvm::SmallVector<Geps, 10> gs = Idn->get_instructions_of_interest();
 
-  if (gs.size() > 0)
-    errs() << "-> #Instructions of interest (" << F.getName() << "): " << gs.size() << "\n";
+  // if (gs.size() > 0)
+  //   errs() << "-> #Instructions of interest (" << F.getName() << "): " << gs.size() << "\n";
 
   // Let's give an id for each instruction of interest
   for (auto &g : gs) {
@@ -303,12 +303,12 @@ bool DAG::runOnFunction(Function &F) {
 
     ConstraintVisitor cv(store, &g);
     DepthVisitor dv(store);
-    DotVisitor t(store);
-    // t.print();
 
     std::set<phoenix::Node*, NodeCompare> *s = dv.getSet();
     if (s->size() > 0){
       errs() << "#Set (" << F.getName() << "): " << s->size() << "\n";
+      DotVisitor t(store);
+      t.print();
     }
 
     for (auto node : *s){
@@ -329,8 +329,8 @@ bool DAG::runOnFunction(Function &F) {
 
   }
   
-  if (gs.size() > 0)
-    errs() << "<- \n";
+  // if (gs.size() > 0)
+  //   errs() << "<- \n";
 
   return false;
 }

@@ -61,9 +61,6 @@ class DepthVisitor : public Visitor {
     if (target->getOther()->hasConstraint()){
       target->getOther()->accept(*this);
     }
-    else {
-      s.insert(target);
-    }
   }
 
   void visit(phoenix::TerminalNode *term) override {

@@ -49,7 +49,7 @@ Value* getDestructor(Instruction *I){
     return nullptr;
 
   default:
-    errs() << "No destructor for: " << *I << "\n";
+    // errs() << "No destructor for: " << *I << "\n";
     return nullptr;
     // return constraintValue();
     std::string str = "No destructor for: ";
