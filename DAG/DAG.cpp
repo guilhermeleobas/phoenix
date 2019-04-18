@@ -21,6 +21,7 @@
 #include "llvm/Transforms/Utils/Cloning.h"
 
 #include <queue>
+#include <tuple>
 
 #include "DAG.h"
 #include "constraintVisitor.h"
@@ -32,23 +33,23 @@
 #define PROFILE_FIRST false
 
 
-BasicBlock *DAG::create_switch(Function *F, BasicBlock *BB,
+Instruction *DAG::create_switch(Function *F, BasicBlock *BB,
                                 BasicBlock *BBProfile, BasicBlock *BBOpt) {
 #define DEFAULT_SWITCH_VALUE 0
 
   // 1. Create a variable to control the switch
   IRBuilder<> Builder(F->getEntryBlock().getFirstNonPHI());
-  Instruction *alloca = Builder.CreateAlloca(Type::getInt8Ty(F->getContext()),
+  Instruction *switch_control = Builder.CreateAlloca(Type::getInt8Ty(F->getContext()),
                                              nullptr, "switch.control");
   Builder.CreateStore(
       ConstantInt::get(Type::getInt8Ty(F->getContext()), DEFAULT_SWITCH_VALUE),
-      alloca);
+      switch_control);
 
   // 2. Create the switch with a default jump to BBProfile
   BasicBlock *BBSwitch =
       BasicBlock::Create(F->getContext(), "Switch", F, BBProfile);
   Builder.SetInsertPoint(BBSwitch);
-  Instruction *load = Builder.CreateLoad(alloca);
+  Instruction *load = Builder.CreateLoad(switch_control);
   SwitchInst *si = Builder.CreateSwitch(load, BBProfile, 3);
 
   // Case with 1 with a jump to BB
@@ -78,7 +79,7 @@ BasicBlock *DAG::create_switch(Function *F, BasicBlock *BB,
     }
   }
 
-  return BBSwitch;
+  return switch_control;
 }
 
 // Since cloneBasicBlock performs a shallow copy of BB.
@@ -101,72 +102,74 @@ BasicBlock *DAG::deep_clone(BasicBlock *BB, ValueToValueMapTy &VMap,
   return clone;
 }
 
-// @BB is the Basic Block that one will clone
-// @V is the value that one will compare against cnt
-// @cnt is the constratint
-BasicBlock *DAG::create_BBProfile(Function *F, BasicBlock *BB,
-                                            Value *V, Value *constraint) {
-  // This method duplicates BB to profile it.
-  //  1. Clone BB (BBProfile)
-  //  2. Insert counters inside BBProfile:
-  //    2.1 The first counter `c1` is just an increment
-  //    2.2 The second counter `c2` is a conditional increment. This increment
-  //        depends whether or not the *node holds the identity. For that, one
-  //        can use a SelectInst:
-  //       %inc   = SelectInst (node == constraintValue) ? 1.0 : 0.0
-  //       %c2    = LoadGlobal (c2Name), %ptr
-  //       %c2aux = add %c2, %inc
-  //       StoreInst %c2aux %ptr
-  //
-
-  // 1. Clone
-  ValueToValueMapTy VMap;
-  BasicBlock *BBProfile = deep_clone(BB, VMap, ".profile", F);
-
-  // 2 Insert counters on BBProfile
+// create and increment C1 whenever the control flow reaches BBProfile 
+AllocaInst* DAG::create_c1(Function *F, BasicBlock *BBProfile){
   IRBuilder<> Builder(F->getEntryBlock().getFirstNonPHI());
 
-  Instruction *c1 = Builder.CreateAlloca(Type::getInt8Ty(F->getContext()),
-                                         nullptr, "c1." + BBProfile->getName());
-  Builder.CreateStore(ConstantInt::get(Type::getInt8Ty(F->getContext()), 0),
-                      c1);
+  auto *I8Ty = Type::getInt8Ty(F->getContext());
+  auto *zero = ConstantInt::get(I8Ty, 0);
+  auto *one = ConstantInt::get(I8Ty, 1);
 
-  Instruction *c2 = Builder.CreateAlloca(Type::getInt8Ty(F->getContext()),
-                                         nullptr, "c2." + BBProfile->getName());
-  Builder.CreateStore(ConstantInt::get(Type::getInt8Ty(F->getContext()), 0),
-                      c2);
+  AllocaInst *c1_ptr = Builder.CreateAlloca(I8Ty, nullptr, "c1_ptr." + BBProfile->getName());
+  Builder.CreateStore(zero, c1_ptr);
 
   // c1 inc
   Builder.SetInsertPoint(BBProfile->getFirstNonPHI());
 
-  LoadInst *load_c1 = Builder.CreateLoad(c1, "c1.load");
-  Value *c1_inc = Builder.CreateAdd(
-      load_c1, ConstantInt::get(Type::getInt8Ty(F->getContext()), 1), "c1.inc");
-  Builder.CreateStore(c1_inc, c1);
+  LoadInst *load_c1 = Builder.CreateLoad(c1_ptr, "c1.load");
+  Value *c1_inc = Builder.CreateAdd(load_c1, one, "c1.inc");
+  Builder.CreateStore(c1_inc, c1_ptr);
 
-  // c2 inc
-
-  Value *Vprofile = VMap[V];
-
-  Builder.SetInsertPoint(cast<Instruction>(Vprofile)->getNextNode());
-
-  Value *cmp;
-  if (Vprofile->getType()->isFloatingPointTy())
-    cmp = Builder.CreateFCmpONE(Vprofile, constraint, "cmp.profile");
-  else
-    cmp = Builder.CreateICmpNE(Vprofile, constraint, "cmp.profile");
-
-  Value *select = Builder.CreateSelect(
-      cmp, ConstantInt::get(Type::getInt8Ty(F->getContext()), 1),
-      ConstantInt::get(Type::getInt8Ty(F->getContext()), 0));
-
-  LoadInst *load_c2 = Builder.CreateLoad(c2, "c2.load");
-  Value *c2_inc = Builder.CreateAdd(load_c2, select, "c2.inc");
-  Builder.CreateStore(c2_inc, c2);
-
-  return BBProfile;
+  return c1_ptr;
 }
 
+// Create and increment c2 when V == constraint
+AllocaInst* DAG::create_c2(Function *F, BasicBlock *BBProfile, Value *V, Value *constraint){
+  IRBuilder<> Builder(F->getEntryBlock().getFirstNonPHI());
+
+  auto *I8Ty = Type::getInt8Ty(F->getContext());
+  auto *zero = ConstantInt::get(I8Ty, 0);
+  auto *one = ConstantInt::get(I8Ty, 1);
+
+  AllocaInst *c2_ptr = Builder.CreateAlloca(I8Ty, nullptr, "c2_ptr." + BBProfile->getName());
+  Builder.CreateStore(zero, c2_ptr);
+
+  // c2 inc
+  Builder.SetInsertPoint(cast<Instruction>(V)->getNextNode());
+
+  Value *cmp;
+  if (V->getType()->isFloatingPointTy())
+    cmp = Builder.CreateFCmpONE(V, constraint, "cmp.profile");
+  else
+    cmp = Builder.CreateICmpNE(V, constraint, "cmp.profile");
+
+  Value *select = Builder.CreateSelect(cmp, one, zero);
+
+  LoadInst *load_c2 = Builder.CreateLoad(c2_ptr, "c2.load");
+  Value *c2_inc = Builder.CreateAdd(load_c2, select, "c2.inc");
+  Builder.CreateStore(c2_inc, c2_ptr);
+
+  return c2_ptr;
+}
+
+// @BB is the Basic Block that one will clone
+// @V is the value that one will compare against cnt
+// @constraint is obviously the constraint
+//
+// This method also remaps V to the Value* on BBProfile
+//
+std::tuple<BasicBlock*, Value*, Value*> DAG::create_BBProfile(Function *F, BasicBlock *BB,
+                                            Value *V, Value *constraint) {
+  ValueToValueMapTy VMap;
+  BasicBlock *BBProfile = deep_clone(BB, VMap, ".profile", F);
+
+  Value *c1 = create_c1(F, BBProfile);
+  Value *c2 = create_c2(F, BBProfile, cast<Value>(VMap[V]), constraint);
+
+  return std::make_tuple(BBProfile, c1, c2);
+}
+
+//
 BasicBlock *DAG::create_BBOpt(Function *F, BasicBlock *BB,
                                         StoreInst *store, Value *V,
                                         Value *constraint) {
@@ -181,10 +184,25 @@ BasicBlock *DAG::create_BBOpt(Function *F, BasicBlock *BB,
 // Creates a BasicBlock right after BBProfile that controls the control flow
 // from BBProfile to BB or BBOpt
 void DAG::create_BBControl(Function *F, BasicBlock *BBProfile,
-                           Value *switch_control, Value *c1, Value *c2) {
-  BasicBlock *BBSwitch = BasicBlock::Create(F->getContext(), "BBControl", F);
+                      Value *switch_control, Value *c1, Value *c2,
+                      ConstantInt *n_iter, ConstantInt *gap){
+
+  
+
 }
 
+void DAG::create_BBControl(Function *F, BasicBlock *BBProfile, Value *switch_control, Value *c1, Value *c2){
+  #define N_ITER 1000
+  #define GAP 501
+
+  auto *I32Ty = Type::getInt8Ty(F->getContext());
+  auto *n_iter = ConstantInt::get(I32Ty, N_ITER);
+  auto *gap = ConstantInt::get(I32Ty, GAP);
+
+  create_BBControl(F, BBProfile, switch_control, c1, c2, n_iter, gap);
+}
+
+// 
 void DAG::profile_and_optimize(Function *F, const Geps &g,
                                const phoenix::Node *node, bool justOptimize) {
   BasicBlock *BB = node->getInst()->getParent();
@@ -192,13 +210,22 @@ void DAG::profile_and_optimize(Function *F, const Geps &g,
 
   if (!justOptimize) {
     assert(node->hasConstraint() && "Node do not have a constraint");
-    BasicBlock *BBProfile = create_BBProfile(F, BB, node->getValue(),
-                                                       node->getConstraint());
 
-    create_switch(F, BB, BBProfile, BBOpt);
+    Value *V = node->getValue();
+    Value *constraint = node->getConstraint();
+
+    auto tupla = create_BBProfile(F, BB, V, constraint);
+    BasicBlock *BBProfile = std::get<0>(tupla);
+    Value *c1 = std::get<1>(tupla);
+    Value *c2 = std::get<2>(tupla);
+
+    Value *switch_control = create_switch(F, BB, BBProfile, BBOpt);
+
+    create_BBControl(F, BBProfile, switch_control, c1, c2);
   }
 }
 
+//
 void DAG::runDAGOptimization(Function &F, llvm::SmallVector<Geps, 10> &gs) {
   for (auto &g : gs) {
     Instruction *I = g.get_instruction();
@@ -230,6 +257,7 @@ void DAG::runDAGOptimization(Function &F, llvm::SmallVector<Geps, 10> &gs) {
   }
 }
 
+//
 bool DAG::runOnFunction(Function &F) {
   if (F.isDeclaration() || F.isIntrinsic() || F.hasAvailableExternallyLinkage())
     return true;
@@ -242,6 +270,7 @@ bool DAG::runOnFunction(Function &F) {
   return false;
 }
 
+//
 void DAG::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<Identify>();
   AU.addRequired<LoopInfoWrapperPass>();

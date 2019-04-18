@@ -22,7 +22,7 @@
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 
-#define DEBUG_TYPE "insertIf"
+#define DEBUG_TYPE "DAG"
 
 using namespace llvm;
 

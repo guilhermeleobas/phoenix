@@ -7,17 +7,16 @@ using namespace llvm;
 #include "node.h"
 #include "parser.h"
 
-struct pack {
-  BasicBlock *BB, *BBOpt, *BBProfile, *BBSwitch, *BBControl;
-  Value *switch_control, *c1, *c2;
-};
-
 class DAG : public FunctionPass {
  private:
   unsigned loop_threshold = 1;
 
 
   void runDAGOptimization(Function &F, llvm::SmallVector<Geps, 10> &g);
+
+  // Cre
+  AllocaInst* create_c1(Function *F, BasicBlock *BBProfile); 
+  AllocaInst* create_c2(Function *F, BasicBlock *BBProfile, Value *V, Value *constraint);
 
   // CloneBasicBlock performs a shallow copy. 
   // This method does a deep copy of BB
@@ -34,7 +33,7 @@ class DAG : public FunctionPass {
   //   - @c1: Count the number of times @BBProfile executes.
   //   - @c2: Count the number of times @V == @constraint
   // 
-  BasicBlock *create_BBProfile(Function *F, BasicBlock *BB, Value *V,
+  std::tuple<BasicBlock*, Value*, Value*> create_BBProfile(Function *F, BasicBlock *BB, Value *V,
                                          Value *constraint);
 
   // @F : A pointer to the function @BB lives in
@@ -55,8 +54,8 @@ class DAG : public FunctionPass {
   // @c1 : # of times @BBProfile were executed
   // @c2 : # of times @V == @constraint on @BBProfile
   // @n_iter : max. number of iterations of @BBProfile
-  // @gap : The minimum difference between @c1 and @c2 that it is better to use BBOpt instead of BB.
-  //   - if @c1 ~ @c2, then it's better to use @BB instead of @BBOopt because one will avoid computations. 
+  // @gap : The minimum difference between @c1 and @c2 to use BBOpt instead of BB.
+  //   - if @c1 ~ @c2, then use @BB 
   //   - else if @c1 >> @c2, then @V is != @constraint most of the times.
   //   - The @gap controls this difference:
   //       if (@c1 - @c2) > @gap then use @BBOpt
@@ -81,8 +80,8 @@ class DAG : public FunctionPass {
   //   1 => jumps to BB
   //   2 => jumps to BBOpt
   // 
-  // returns the basic block created (@BBSwitch)
-  BasicBlock *create_switch(Function *F, BasicBlock *BB, BasicBlock *BBProfile,
+  // returns the instruction that controls the switch jump target
+  Instruction *create_switch(Function *F, BasicBlock *BB, BasicBlock *BBProfile,
                              BasicBlock *BBOpt);
 
   void profile_and_optimize(Function *F, const Geps &g,
