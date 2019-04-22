@@ -130,9 +130,9 @@ void insert_if(StoreInst *store, Value *v, Value *constraint) {
   Value *cmp;
 
   if (v->getType()->isFloatingPointTy()) {
-    cmp = Builder.CreateFCmpONE(v, constraint);
+    cmp = Builder.CreateFCmpOEQ(v, constraint);
   } else {
-    cmp = Builder.CreateICmpNE(v, constraint);
+    cmp = Builder.CreateICmpEQ(v, constraint);
   }
 
   TerminatorInst *br = llvm::SplitBlockAndInsertIfThen(
@@ -141,6 +141,8 @@ void insert_if(StoreInst *store, Value *v, Value *constraint) {
   BasicBlock *BBThen = br->getParent();
   BasicBlock *BBPrev = BBThen->getSinglePredecessor();
   BasicBlock *BBEnd = BBThen->getSingleSuccessor();
+
+  cast<BranchInst>(BBPrev->getTerminator())->swapSuccessors();
 
   store->moveBefore(br);
 
