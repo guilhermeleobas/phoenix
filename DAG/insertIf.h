@@ -26,17 +26,6 @@
 
 using namespace llvm;
 
-// void move_from_prev_to_then(BasicBlock *BBPrev, BasicBlock *BBThen);
-// void move_from_prev_to_end(BasicBlock *BBPrev, BasicBlock *BBThen,
-//                            BasicBlock *BBEnd);
-// void move_marked_to_basic_block(llvm::SmallVector<Instruction *, 10> &marked,
-//                                 Instruction *br);
-// llvm::SmallVector<Instruction *, 10> mark_instructions_to_be_moved(
-//     StoreInst *init);
-// void insert_if(StoreInst *store, Value *v, Value *constraint);
-
-// bool worth_insert_if(Geps &g, unsigned loop_threshold = 1);
-
 
 llvm::SmallVector<Instruction *, 10> mark_instructions_to_be_moved(
     StoreInst *store) {
@@ -62,7 +51,7 @@ llvm::SmallVector<Instruction *, 10> mark_instructions_to_be_moved(
     bool all_marked = std::all_of(
         begin(v->users()), end(v->users()), [&v, &marked](Value *user) {
           if (cast<Instruction>(user)->getParent() != v->getParent())
-            return true;
+            return false;
           return find(marked, user) != marked.end();
         });
 
@@ -140,8 +129,6 @@ void insert_if(StoreInst *store, Value *v, Value *constraint) {
 
   Value *cmp;
 
-  errs() << "Setting constraint: " << *constraint << "\n";
-
   if (v->getType()->isFloatingPointTy()) {
     cmp = Builder.CreateFCmpONE(v, constraint);
   } else {
@@ -161,7 +148,7 @@ void insert_if(StoreInst *store, Value *v, Value *constraint) {
       mark_instructions_to_be_moved(store);
 
   for_each(marked,
-           [](Instruction *inst) { dbgs() << " Marked: " << *inst << "\n"; });
+           [](Instruction *inst) { DEBUG(dbgs() << " Marked: " << *inst << "\n"); });
 
   move_marked_to_basic_block(marked, br);
 

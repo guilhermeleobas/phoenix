@@ -32,31 +32,36 @@
 #define DEBUG_TYPE "DAG"
 #define PROFILE_FIRST false
 
+#define SWITCH_NUM_CASES 3
+#define SWITCH_BB_PROFILE_INDEX 0
+#define SWITCH_BB_INDEX 1
+#define SWITCH_BB_OPT_INDEX 2
 
 Instruction *DAG::create_switch(Function *F, BasicBlock *BB,
                                 BasicBlock *BBProfile, BasicBlock *BBOpt) {
-#define DEFAULT_SWITCH_VALUE 0
-
   // 1. Create a variable to control the switch
   IRBuilder<> Builder(F->getEntryBlock().getFirstNonPHI());
-  Instruction *switch_control = Builder.CreateAlloca(Type::getInt8Ty(F->getContext()),
-                                             nullptr, "switch.control");
-  Builder.CreateStore(
-      ConstantInt::get(Type::getInt8Ty(F->getContext()), DEFAULT_SWITCH_VALUE),
-      switch_control);
+  Instruction *switch_control_ptr = Builder.CreateAlloca(
+      Type::getInt32Ty(F->getContext()), nullptr, "switch.control_ptr");
+  Builder.CreateStore(ConstantInt::get(Type::getInt32Ty(F->getContext()),
+                                       SWITCH_BB_PROFILE_INDEX),
+                      switch_control_ptr);
 
   // 2. Create the switch with a default jump to BBProfile
   BasicBlock *BBSwitch =
-      BasicBlock::Create(F->getContext(), "Switch", F, BBProfile);
+      BasicBlock::Create(F->getContext(), "Switch", F, BB);
   Builder.SetInsertPoint(BBSwitch);
-  Instruction *load = Builder.CreateLoad(switch_control);
-  SwitchInst *si = Builder.CreateSwitch(load, BBProfile, 3);
+  Instruction *load = Builder.CreateLoad(switch_control_ptr, "switch_control");
+  SwitchInst *si = Builder.CreateSwitch(load, BBProfile, SWITCH_NUM_CASES);
 
   // Case with 1 with a jump to BB
-  si->addCase(ConstantInt::get(Type::getInt8Ty(F->getContext()), 1), BB);
+  si->addCase(
+      ConstantInt::get(Type::getInt32Ty(F->getContext()), SWITCH_BB_INDEX), BB);
 
   // Case 2 with a jump to the optimized BB
-  si->addCase(ConstantInt::get(Type::getInt8Ty(F->getContext()), 2), BBOpt);
+  si->addCase(
+      ConstantInt::get(Type::getInt32Ty(F->getContext()), SWITCH_BB_OPT_INDEX),
+      BBOpt);
 
   // Iterate over every predecessor of BB and changes it's jump to switchBB
   for (BasicBlock *pred : predecessors(BB)) {
@@ -79,7 +84,7 @@ Instruction *DAG::create_switch(Function *F, BasicBlock *BB,
     }
   }
 
-  return switch_control;
+  return switch_control_ptr;
 }
 
 // Since cloneBasicBlock performs a shallow copy of BB.
@@ -102,15 +107,16 @@ BasicBlock *DAG::deep_clone(BasicBlock *BB, ValueToValueMapTy &VMap,
   return clone;
 }
 
-// create and increment C1 whenever the control flow reaches BBProfile 
-AllocaInst* DAG::create_c1(Function *F, BasicBlock *BBProfile){
+// create and increment C1 whenever the control flow reaches BBProfile
+AllocaInst *DAG::create_c1(Function *F, BasicBlock *BBProfile) {
   IRBuilder<> Builder(F->getEntryBlock().getFirstNonPHI());
 
-  auto *I8Ty = Type::getInt8Ty(F->getContext());
-  auto *zero = ConstantInt::get(I8Ty, 0);
-  auto *one = ConstantInt::get(I8Ty, 1);
+  auto *I32Ty = Type::getInt32Ty(F->getContext());
+  auto *zero = ConstantInt::get(I32Ty, 0);
+  auto *one = ConstantInt::get(I32Ty, 1);
 
-  AllocaInst *c1_ptr = Builder.CreateAlloca(I8Ty, nullptr, "c1_ptr." + BBProfile->getName());
+  AllocaInst *c1_ptr =
+      Builder.CreateAlloca(I32Ty, nullptr, "c1_ptr." + BBProfile->getName());
   Builder.CreateStore(zero, c1_ptr);
 
   // c1 inc
@@ -124,14 +130,16 @@ AllocaInst* DAG::create_c1(Function *F, BasicBlock *BBProfile){
 }
 
 // Create and increment c2 when V == constraint
-AllocaInst* DAG::create_c2(Function *F, BasicBlock *BBProfile, Value *V, Value *constraint){
+AllocaInst *DAG::create_c2(Function *F, BasicBlock *BBProfile, Value *V,
+                           Value *constraint) {
   IRBuilder<> Builder(F->getEntryBlock().getFirstNonPHI());
 
-  auto *I8Ty = Type::getInt8Ty(F->getContext());
-  auto *zero = ConstantInt::get(I8Ty, 0);
-  auto *one = ConstantInt::get(I8Ty, 1);
+  auto *I32Ty = Type::getInt32Ty(F->getContext());
+  auto *zero = ConstantInt::get(I32Ty, 0);
+  auto *one = ConstantInt::get(I32Ty, 1);
 
-  AllocaInst *c2_ptr = Builder.CreateAlloca(I8Ty, nullptr, "c2_ptr." + BBProfile->getName());
+  AllocaInst *c2_ptr =
+      Builder.CreateAlloca(I32Ty, nullptr, "c2_ptr." + BBProfile->getName());
   Builder.CreateStore(zero, c2_ptr);
 
   // c2 inc
@@ -158,75 +166,172 @@ AllocaInst* DAG::create_c2(Function *F, BasicBlock *BBProfile, Value *V, Value *
 //
 // This method also remaps V to the Value* on BBProfile
 //
-std::tuple<BasicBlock*, Value*, Value*> DAG::create_BBProfile(Function *F, BasicBlock *BB,
-                                            Value *V, Value *constraint) {
-  ValueToValueMapTy VMap;
-  BasicBlock *BBProfile = deep_clone(BB, VMap, ".profile", F);
-
+std::pair<Value*, Value*> DAG::create_BBProfile(Function *F, ValueToValueMapTy &VMap, BasicBlock *BBProfile, Value *V,
+                      Value *constraint) {
   Value *c1 = create_c1(F, BBProfile);
   Value *c2 = create_c2(F, BBProfile, cast<Value>(VMap[V]), constraint);
 
-  return std::make_tuple(BBProfile, c1, c2);
+  return std::make_pair(c1, c2);
 }
 
 //
-BasicBlock *DAG::create_BBOpt(Function *F, BasicBlock *BB,
-                                        StoreInst *store, Value *V,
-                                        Value *constraint) {
-  ValueToValueMapTy VMap;
-  BasicBlock *BBOpt = deep_clone(BB, VMap, ".opt", F);
+void DAG::create_BBOpt(ValueToValueMapTy &VMap, StoreInst *store, Value *V,
+                       Value *constraint) {
 
   insert_if(cast<StoreInst>(VMap[store]), VMap[V], constraint);
-
-  return BBOpt;
 }
 
 // Creates a BasicBlock right after BBProfile that controls the control flow
 // from BBProfile to BB or BBOpt
 void DAG::create_BBControl(Function *F, BasicBlock *BBProfile,
-                      Value *switch_control, Value *c1, Value *c2,
-                      ConstantInt *n_iter, ConstantInt *gap){
+                           Value *switch_control_ptr, Value *c1_ptr,
+                           Value *c2_ptr, ConstantInt *n_iter,
+                           ConstantInt *gap) {
+  auto *I32Ty = Type::getInt32Ty(F->getContext());
+  auto *BBOpt_target_value = ConstantInt::get(I32Ty, SWITCH_BB_OPT_INDEX);
+  auto *BB_target_value = ConstantInt::get(I32Ty, SWITCH_BB_INDEX);
 
-  
+  auto *one = ConstantInt::get(I32Ty, 1);
+  auto *zero = ConstantInt::get(I32Ty, 0);
 
+  // Create BBControl and insert it right after BBProfile
+  BasicBlock *BBControl =
+      BBProfile->splitBasicBlock(BBProfile->getTerminator(), "BBControl");
+  IRBuilder<> Builder(BBControl->getFirstNonPHI());
+
+  Value *c1 = Builder.CreateLoad(c1_ptr, "c1");
+  Value *c2 = Builder.CreateLoad(c2_ptr, "c2");
+  Value *sub = Builder.CreateSub(c1, c2, "c1-c2");
+  Value *switch_control =
+      Builder.CreateLoad(switch_control_ptr, "switch_control");
+
+  // if c1 - c2 > gap then we change switch_control to jump to BBOpt, otherwise,
+  // jump to BB
+  Value *gap_cmp = Builder.CreateICmpSGE(sub, gap, "gap.cmp");
+  Value *new_target =
+      Builder.CreateSelect(gap_cmp, BBOpt_target_value, BB_target_value);
+
+  // decide if it is time to change the switch jump
+  Value *iter_cmp = Builder.CreateICmpEQ(c1, n_iter, "iter.cmp");
+  Value *n_switch_control = Builder.CreateSelect(
+      iter_cmp, new_target, switch_control, "new_switch_control");
 }
 
-void DAG::create_BBControl(Function *F, BasicBlock *BBProfile, Value *switch_control, Value *c1, Value *c2){
-  #define N_ITER 1000
-  #define GAP 501
+void DAG::create_BBControl(Function *F, BasicBlock *BBProfile,
+                           Value *switch_control_ptr, Value *c1_ptr,
+                           Value *c2_ptr) {
+#define N_ITER 1000
+#define GAP 501
 
-  auto *I32Ty = Type::getInt8Ty(F->getContext());
+  auto *I32Ty = Type::getInt32Ty(F->getContext());
   auto *n_iter = ConstantInt::get(I32Ty, N_ITER);
   auto *gap = ConstantInt::get(I32Ty, GAP);
 
-  create_BBControl(F, BBProfile, switch_control, c1, c2, n_iter, gap);
+  create_BBControl(F, BBProfile, switch_control_ptr, c1_ptr, c2_ptr, n_iter,
+                   gap);
 }
 
-// 
-void DAG::profile_and_optimize(Function *F, const Geps &g,
-                               const phoenix::Node *node, bool justOptimize) {
-  BasicBlock *BB = node->getInst()->getParent();
-  BasicBlock *BBOpt = create_BBOpt(F, BB, g.get_store_inst(), node->getValue(), node->getConstraint());
+std::vector<Instruction *> DAG::find_usages_outside_BB(BasicBlock *BB,
+                                                       Instruction *I) {
+  std::vector<Instruction *> v;
 
-  if (!justOptimize) {
+  for (User *user : I->users()) {
+    Instruction *other = cast<Instruction>(user);
+    if (other->getParent() != BB)
+      v.push_back(other);
+  }
+
+  return v;
+}
+
+void DAG::create_phi_nodes(Function *F, BasicBlock *BB, BasicBlock *BBProfile,
+                           BasicBlock *BBOpt, ValueToValueMapTy &VMapProfile,
+                           ValueToValueMapTy &VMapOpt) {
+  BasicBlock *BBPhi = BB->splitBasicBlock(BB->getTerminator(), "BBPhi");
+  IRBuilder<> Builder(BBPhi->getFirstNonPHI());
+
+  for (auto &I : *BB) {
+    // check if all uses of I are in BB
+    auto v = find_usages_outside_BB(BB, &I);
+
+    if (v.size() == 0)
+      continue;
+
+    // Create the PHI node
+    auto T = I.getType();
+    auto name = I.getName();
+    PHINode *phi = Builder.CreatePHI(T, 3, name + ".phi");
+
+    Instruction *IProf = cast<Instruction>(VMapProfile[&I]);
+    Instruction *IOpt = cast<Instruction>(VMapOpt[&I]);
+
+    phi->addIncoming(&I, BB);
+    phi->addIncoming(IProf, BBProfile);
+    phi->addIncoming(IOpt, BBOpt);
+
+    // iterate over every inst \in v and replace the target operand by the newly created PHI node
+    // the target operand is the Value* that produces the PHI node that came from BB.
+    for (Instruction *Inst : v) {
+      for (unsigned i = 0; i < Inst->getNumOperands(); i++) {
+        Value *op = Inst->getOperand(i);
+        if (!isa<Instruction>(op))
+          continue;
+        if (cast<Instruction>(op) == &I){
+          DEBUG(errs() << "replacing " << *op << " -> " << *phi << "\n");
+          Inst->setOperand(i, phi);
+        }
+      }
+    }
+
+  }
+
+  // Change the branch inst to jump straight to BBPhi
+  BBProfile->getTerminator()->setSuccessor(0, BBPhi);
+  BBOpt->getTerminator()->setSuccessor(0, BBPhi);
+
+}
+
+//
+void DAG::profile_and_optimize(Function *F, const Geps &g,
+                               const phoenix::Node *node, bool alsoProfile) {
+  BasicBlock *BB = node->getInst()->getParent();
+
+  ValueToValueMapTy VMapOpt;
+  BasicBlock *BBOpt = deep_clone(BB, VMapOpt, ".opt", F);
+
+  ValueToValueMapTy VMapProfile;
+  BasicBlock *BBProfile = deep_clone(BB, VMapProfile, ".profile", F);
+
+
+  if (alsoProfile) {
     assert(node->hasConstraint() && "Node do not have a constraint");
+
+    create_phi_nodes(F, BB, BBProfile, BBOpt, VMapProfile, VMapOpt);
+
+    create_BBOpt(VMapOpt, g.get_store_inst(), node->getValue(),
+                 node->getConstraint());
 
     Value *V = node->getValue();
     Value *constraint = node->getConstraint();
 
-    auto tupla = create_BBProfile(F, BB, V, constraint);
-    BasicBlock *BBProfile = std::get<0>(tupla);
-    Value *c1 = std::get<1>(tupla);
-    Value *c2 = std::get<2>(tupla);
+    auto p = create_BBProfile(F, VMapProfile, BB, V, constraint);
+    Value *c1 = p.first;
+    Value *c2 = p.second;
 
-    Value *switch_control = create_switch(F, BB, BBProfile, BBOpt);
+    Value *switch_control_ptr = create_switch(F, BB, BBProfile, BBOpt);
 
-    create_BBControl(F, BBProfile, switch_control, c1, c2);
+    create_BBControl(F, BBProfile, switch_control_ptr, c1, c2);
+  }
+  else {
+    create_BBOpt(VMapOpt, g.get_store_inst(), node->getValue(),
+                 node->getConstraint());
   }
 }
 
 //
 void DAG::runDAGOptimization(Function &F, llvm::SmallVector<Geps, 10> &gs) {
+  std::set<BasicBlock *> already_optimized;
+
   for (auto &g : gs) {
     Instruction *I = g.get_instruction();
 
@@ -247,10 +352,17 @@ void DAG::runDAGOptimization(Function &F, llvm::SmallVector<Geps, 10> &gs) {
     std::set<phoenix::Node *, NodeCompare> *s = dv.getSet();
 
     for (auto node : reverse(*s)) {
-      DotVisitor dv(store);
-      dv.print();
+      // DotVisitor dv(store);
+      // dv.print();
+      if (already_optimized.find(node->getInst()->getParent()) !=
+          already_optimized.end())
+        continue;
 
-      profile_and_optimize(&F, g, node, false);
+      already_optimized.insert(node->getInst()->getParent());
+
+      errs() << *node << "\n";
+
+      profile_and_optimize(&F, g, node, true);
 
       break;  // Let's just insert on the first element;
     }
