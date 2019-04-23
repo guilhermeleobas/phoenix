@@ -147,11 +147,11 @@ AllocaInst *DAG::create_c2(Function *F, BasicBlock *BBProfile, Value *V,
 
   Value *cmp;
   if (V->getType()->isFloatingPointTy())
-    cmp = Builder.CreateFCmpONE(V, constraint, "cmp.profile");
+    cmp = Builder.CreateFCmpOEQ(V, constraint, "cmp.profile");
   else
-    cmp = Builder.CreateICmpNE(V, constraint, "cmp.profile");
+    cmp = Builder.CreateICmpEQ(V, constraint, "cmp.profile");
 
-  Value *select = Builder.CreateSelect(cmp, one, zero);
+  Value *select = Builder.CreateSelect(cmp, zero, one);
 
   LoadInst *load_c2 = Builder.CreateLoad(c2_ptr, "c2.load");
   Value *c2_inc = Builder.CreateAdd(load_c2, select, "c2.inc");
@@ -205,16 +205,19 @@ void DAG::create_BBControl(Function *F, BasicBlock *BBProfile,
   Value *switch_control =
       Builder.CreateLoad(switch_control_ptr, "switch_control");
 
-  // if c1 - c2 > gap then we change switch_control to jump to BBOpt, otherwise,
-  // jump to BB
+  // if c1 - c2 > gap then we change switch_control to jump to BB, otherwise,
+  // jump to BBOpt
   Value *gap_cmp = Builder.CreateICmpSGE(sub, gap, "gap.cmp");
   Value *new_target =
-      Builder.CreateSelect(gap_cmp, BBOpt_target_value, BB_target_value);
+      Builder.CreateSelect(gap_cmp, BB_target_value, BBOpt_target_value);
 
   // decide if it is time to change the switch jump
   Value *iter_cmp = Builder.CreateICmpEQ(c1, n_iter, "iter.cmp");
   Value *n_switch_control = Builder.CreateSelect(
       iter_cmp, new_target, switch_control, "new_switch_control");
+
+  // Save the value
+  Builder.CreateStore(n_switch_control, switch_control_ptr);
 }
 
 void DAG::create_BBControl(Function *F, BasicBlock *BBProfile,
@@ -314,7 +317,7 @@ void DAG::profile_and_optimize(Function *F, const Geps &g,
     Value *V = node->getValue();
     Value *constraint = node->getConstraint();
 
-    auto p = create_BBProfile(F, VMapProfile, BB, V, constraint);
+    auto p = create_BBProfile(F, VMapProfile, BBProfile, V, constraint);
     Value *c1 = p.first;
     Value *c2 = p.second;
 
