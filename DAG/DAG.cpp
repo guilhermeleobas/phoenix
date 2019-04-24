@@ -369,9 +369,9 @@ void DAG::runDAGOptimization(Function &F, llvm::SmallVector<Geps, 10> &gs) {
       // dv.print();
       errs() << "[" << F.getName() << "] " << *node << "\n";
 
-      profile_and_optimize(&F, g, node, false);
+      profile_and_optimize(&F, g, node, true);
 
-      // break;  // Let's just insert on the first element;
+      break;  // Let's just insert on the first element;
     }
     errs() << "\n";
   }
