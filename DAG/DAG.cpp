@@ -295,17 +295,18 @@ void DAG::create_phi_nodes(Function *F, BasicBlock *BB, BasicBlock *BBProfile,
 
 //
 void DAG::profile_and_optimize(Function *F, const Geps &g,
-                               const phoenix::Node *node, bool alsoProfile) {
-  BasicBlock *BB = node->getInst()->getParent();
-
-  ValueToValueMapTy VMapOpt;
-  BasicBlock *BBOpt = deep_clone(BB, VMapOpt, ".opt", F);
-
-  ValueToValueMapTy VMapProfile;
-  BasicBlock *BBProfile = deep_clone(BB, VMapProfile, ".profile", F);
+                               const phoenix::Node *node, bool profile) {
 
 
-  if (alsoProfile) {
+  if (profile) {
+    BasicBlock *BB = node->getInst()->getParent();
+
+    ValueToValueMapTy VMapOpt;
+    BasicBlock *BBOpt = deep_clone(BB, VMapOpt, ".opt", F);
+
+    ValueToValueMapTy VMapProfile;
+    BasicBlock *BBProfile = deep_clone(BB, VMapProfile, ".profile", F);
+
     assert(node->hasConstraint() && "Node do not have a constraint");
 
     create_phi_nodes(F, BB, BBProfile, BBOpt, VMapProfile, VMapOpt);
@@ -325,8 +326,10 @@ void DAG::profile_and_optimize(Function *F, const Geps &g,
     create_BBControl(F, BBProfile, switch_control_ptr, c1, c2);
   }
   else {
-    create_BBOpt(VMapOpt, g.get_store_inst(), node->getValue(),
-                 node->getConstraint());
+    StoreInst *store = g.get_store_inst();
+    Value *value = node->getValue();
+    Value *constraint = node->getConstraint();
+    insert_if(g.get_store_inst(), value, constraint);
   }
 }
 
