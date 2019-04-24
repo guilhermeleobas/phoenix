@@ -154,18 +154,21 @@ class ConstraintVisitor : public Visitor {
     
     Instruction *I = target->getInst();
 
-    switch(I->getOpcode()){
-      case Instruction::Sub:
-      case Instruction::FSub:
-      case Instruction::Shl:
-      case Instruction::LShr:
-      case Instruction::AShr:
-      case Instruction::UDiv:
-      case Instruction::SDiv:
-        if (isa<phoenix::LoadNode>(target->right)){
-          return;
-        }
-    }
+    // switch(I->getOpcode()){
+    //   case Instruction::Sub:
+    //   case Instruction::FSub:
+    //   case Instruction::Shl:
+    //   case Instruction::LShr:
+    //   case Instruction::AShr:
+    //   case Instruction::UDiv:
+    //   case Instruction::SDiv:
+    //     if (isa<phoenix::LoadNode>(target->right)){
+    //       errs() << "Retornou: " << *I << "\n";
+    //       errs() << "left: " << *target->left << "\n";
+    //       errs() << "right: " << *target->right << "\n";
+    //       return;
+    //     }
+    // }
 
     target->setConstraint(id);
 

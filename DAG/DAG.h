@@ -101,6 +101,8 @@ class DAG : public FunctionPass {
                         BasicBlock *BBOpt, ValueToValueMapTy &VMapProfile,
                         ValueToValueMapTy &VMapOpt);
 
+  void split(StoreInst *store) const;
+
   void profile_and_optimize(Function *F, const Geps &g,
                             const phoenix::Node *node, bool alsoProfile);
 

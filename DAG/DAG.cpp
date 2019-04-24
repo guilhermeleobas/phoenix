@@ -177,7 +177,6 @@ std::pair<Value*, Value*> DAG::create_BBProfile(Function *F, ValueToValueMapTy &
 //
 void DAG::create_BBOpt(ValueToValueMapTy &VMap, StoreInst *store, Value *V,
                        Value *constraint) {
-
   insert_if(cast<StoreInst>(VMap[store]), VMap[V], constraint);
 }
 
@@ -331,9 +330,14 @@ void DAG::profile_and_optimize(Function *F, const Geps &g,
   }
 }
 
+
+void DAG::split(StoreInst *store) const {
+  BasicBlock *BB = store->getParent();
+  auto *n = BB->splitBasicBlock(store->getNextNode());
+}
+
 //
 void DAG::runDAGOptimization(Function &F, llvm::SmallVector<Geps, 10> &gs) {
-  std::set<BasicBlock *> already_optimized;
 
   for (auto &g : gs) {
     Instruction *I = g.get_instruction();
@@ -346,29 +350,27 @@ void DAG::runDAGOptimization(Function &F, llvm::SmallVector<Geps, 10> &gs) {
 
     if (!worth_insert_if(g)) continue;
 
+    // Split the basic block at each store instruction
+    split(g.get_store_inst());
+
     phoenix::StoreNode *store =
         cast<phoenix::StoreNode>(myParser(g.get_store_inst()));
 
     ConstraintVisitor cv(store, &g);
     DepthVisitor dv(store);
 
-    std::set<phoenix::Node *, NodeCompare> *s = dv.getSet();
+    NodeSet s = dv.getSet();
 
-    for (auto node : reverse(*s)) {
+    for (auto node : s) {
       // DotVisitor dv(store);
       // dv.print();
-      if (already_optimized.find(node->getInst()->getParent()) !=
-          already_optimized.end())
-        continue;
+      errs() << "[" << F.getName() << "] " << *node << "\n";
 
-      already_optimized.insert(node->getInst()->getParent());
+      profile_and_optimize(&F, g, node, false);
 
-      errs() << *node << "\n";
-
-      profile_and_optimize(&F, g, node, true);
-
-      break;  // Let's just insert on the first element;
+      // break;  // Let's just insert on the first element;
     }
+    errs() << "\n";
   }
 }
 

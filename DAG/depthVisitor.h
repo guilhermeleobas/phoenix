@@ -1,14 +1,11 @@
 #pragma once
 
-struct NodeCompare {
-  bool operator() (const phoenix::Node *a, const phoenix::Node *b) const {
-    return a->distance() < b->distance();
-  }
-};
+#include "NodeSet.h"
 
 class DepthVisitor : public Visitor {
  private:
-  std::set<phoenix::Node*, NodeCompare> s;
+  // std::set<phoenix::Node*, NodeCompare> s;
+  NodeSet s;
 
  public:
 
@@ -16,8 +13,8 @@ class DepthVisitor : public Visitor {
     store->accept(*this);
   }
 
-  std::set<phoenix::Node*, NodeCompare>* getSet(void){
-    return &s;
+  NodeSet getSet(void){
+    return s;
   }
 
  private:

@@ -180,15 +180,15 @@ class BinaryNode : public Node {
 class TargetOpNode : public BinaryNode {
  public:
   TargetOpNode(BinaryNode *binary) : BinaryNode(binary->left, binary->right, binary->getInst(), NK_TargetOpNode){
-    assert(((isa<LoadNode>(right) || isa<LoadNode>(left))) && "Either `left` or `right` must be a LoadNode!");
+    assert (isa<LoadNode>(left) && "@left must be a LoadNode");
   }
 
   LoadNode* getLoad(void) const {
-    return isa<LoadNode>(left) ? cast<LoadNode>(left) : cast<LoadNode>(right);
+    return cast<LoadNode>(left);
   }
 
   Node* getOther(void) const {
-    return isa<LoadNode>(left) ? right : left;
+    return right;
   }
 
   MAKE_VISITABLE;
