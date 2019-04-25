@@ -15,7 +15,7 @@
 
 using namespace llvm;
 
-phoenix::Node* myParser(BasicBlock *BB, Value *V){
+phoenix::Node* myParser(BasicBlock *BB, Value *V, unsigned pos){
 
   if (Constant *C = dyn_cast<Constant>(V)){
     if (isa<ConstantInt>(C))
@@ -38,22 +38,22 @@ phoenix::Node* myParser(BasicBlock *BB, Value *V){
 
     if (isa<BinaryOperator>(I) ||
         isa<CmpInst>(I)){
-      phoenix::Node *left = myParser(BB, I->getOperand(0));
-      phoenix::Node *right = myParser(BB, I->getOperand(1));
+      phoenix::Node *left = myParser(BB, I->getOperand(0), pos);
+      phoenix::Node *right = myParser(BB, I->getOperand(1), pos);
       return new phoenix::BinaryNode(left, right, I);
     }
     else if (isa<CastInst>(I)){
-      phoenix::Node *node = myParser(BB, I->getOperand(0));
+      phoenix::Node *node = myParser(BB, I->getOperand(0), pos);
       return new phoenix::CastNode(node, I);
     }
     else if (isa<UnaryInstruction>(I)){
-      phoenix::Node* node = myParser(BB, I->getOperand(0));
+      phoenix::Node* node = myParser(BB, I->getOperand(0), pos);
       return new phoenix::UnaryNode(node, I);
     }
     else if (StoreInst *store = dyn_cast<StoreInst>(I)){
-      phoenix::Node *node = myParser(BB, store->getValueOperand());
+      phoenix::Node *node = myParser(BB, store->getValueOperand(), pos);
       if (phoenix::BinaryNode *binary = dyn_cast<phoenix::BinaryNode>(node)){
-        phoenix::TargetOpNode *top = new phoenix::TargetOpNode(binary);
+        phoenix::TargetOpNode *top = new phoenix::TargetOpNode(binary, pos);
         return new phoenix::StoreNode(top, store);
       }
       else {
@@ -74,6 +74,6 @@ phoenix::Node* myParser(BasicBlock *BB, Value *V){
   return nullptr;
 }
 
-phoenix::Node* myParser(Instruction *I){
-  return myParser(I->getParent(), I);
+phoenix::Node* myParser(StoreInst *store, unsigned pos){
+  return myParser(store->getParent(), store, pos);
 }

@@ -357,7 +357,7 @@ void DAG::runDAGOptimization(Function &F, llvm::SmallVector<Geps, 10> &gs) {
     split(g.get_store_inst());
 
     phoenix::StoreNode *store =
-        cast<phoenix::StoreNode>(myParser(g.get_store_inst()));
+        cast<phoenix::StoreNode>(myParser(g.get_store_inst(), g.get_operand_pos()));
 
     ConstraintVisitor cv(store, &g);
     DepthVisitor dv(store);

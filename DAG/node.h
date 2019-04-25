@@ -16,6 +16,7 @@ using namespace llvm;
 
 #include "visitor.h"
 #include "constraint.h"
+#include "../Identify/Position.h"
 
 class Visitor;
 
@@ -179,7 +180,10 @@ class BinaryNode : public Node {
 
 class TargetOpNode : public BinaryNode {
  public:
-  TargetOpNode(BinaryNode *binary) : BinaryNode(binary->left, binary->right, binary->getInst(), NK_TargetOpNode){
+  TargetOpNode(BinaryNode *binary, unsigned pos) : BinaryNode(binary->left, binary->right, binary->getInst(), NK_TargetOpNode){
+    if (pos == SECOND)
+      std::swap(left, right);
+
     assert (isa<LoadNode>(left) && "@left must be a LoadNode");
   }
 
