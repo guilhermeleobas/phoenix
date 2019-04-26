@@ -339,6 +339,12 @@ void DAG::split(StoreInst *store) const {
   auto *n = BB->splitBasicBlock(store->getNextNode());
 }
 
+void DAG::split(BasicBlock *BB) const {
+  if (isa<PHINode>(BB->begin())){
+    BB->splitBasicBlock(BB->getFirstNonPHI());
+  }
+}
+
 //
 void DAG::runDAGOptimization(Function &F, llvm::SmallVector<Geps, 10> &gs) {
 
@@ -355,6 +361,7 @@ void DAG::runDAGOptimization(Function &F, llvm::SmallVector<Geps, 10> &gs) {
 
     // Split the basic block at each store instruction
     split(g.get_store_inst());
+    split(g.get_store_inst()->getParent());
 
     phoenix::StoreNode *store =
         cast<phoenix::StoreNode>(myParser(g.get_store_inst(), g.get_operand_pos()));

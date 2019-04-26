@@ -102,6 +102,7 @@ class DAG : public FunctionPass {
                         ValueToValueMapTy &VMapOpt);
 
   void split(StoreInst *store) const;
+  void split(BasicBlock *BB) const;
 
   void profile_and_optimize(Function *F, const Geps &g,
                             const phoenix::Node *node, bool alsoProfile);
