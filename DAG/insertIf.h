@@ -26,7 +26,6 @@
 
 using namespace llvm;
 
-
 llvm::SmallVector<Instruction *, 10> mark_instructions_to_be_moved(
     StoreInst *store) {
   std::queue<Instruction *> q;
@@ -167,4 +166,13 @@ bool worth_insert_if(Geps &g, unsigned loop_threshold = 1) {
                << " threshold " << g.get_loop_depth() << " is not greater than "
                << loop_threshold << "\n\n");
   return false;
+}
+
+void no_profile(Function *F, const Geps &g, NodeSet &s){
+  for (auto &node : s){
+    StoreInst *store = g.get_store_inst();
+    Value *value = node->getValue();
+    Value *constraint = node->getConstraint();
+    insert_if(g.get_store_inst(), value, constraint);
+  }
 }

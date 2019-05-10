@@ -84,8 +84,10 @@ class Node: public Counter, public Constraint {
 
   NodeKind getKind() const { return Kind; }
 
-  Value* getValue() const { return V; }
-  Instruction* getInst() const { return dyn_cast<Instruction>(V); }
+  Value* getValue() { return V; }
+  const Value* getValue() const { return V; }
+  Instruction* getInst() { return dyn_cast<Instruction>(V); }
+  const Instruction* getInst() const { return dyn_cast<Instruction>(V); }
 
   std::string name(void) const {
     if (getValue()->hasName())
@@ -109,8 +111,8 @@ class Node: public Counter, public Constraint {
     if (!isa<Instruction>(V))
       return -1;
 
-    Instruction *I = getInst();
-    BasicBlock *BB = I->getParent();
+    const Instruction *I = getInst();
+    const BasicBlock *BB = I->getParent();
     int i = 0;
 
     for (auto &other : *BB){
@@ -245,7 +247,7 @@ class ConstantIntNode : public ConstantNode {
   ConstantIntNode(Constant *C) : ConstantNode(C, NK_ConstantIntNode){}
 
   std::string name(void) const {
-    ConstantInt *C = cast<ConstantInt>(getValue());
+    const ConstantInt *C = cast<ConstantInt>(getValue());
     return std::to_string(C->getSExtValue());
   }
 

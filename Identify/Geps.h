@@ -1,5 +1,7 @@
 #pragma once
 
+using namespace llvm;
+
 #include "Position.h"
 
 // This instruction encapsulates the necessary things to keep track of
