@@ -61,17 +61,43 @@ static Loop *get_outer_loop(LoopInfo *LI, BasicBlock *BB) {
 }
 
 static BasicBlock *split_pre_header(Loop *L, LoopInfo *LI, DominatorTree *DT) {
-  auto *from = L->getLoopPreheader();
-  auto *to = L->getHeader();
-  // new versions of LLVM requires a fifth parameter (MemorySSA)
-  return SplitEdge(from, to, DT, LI);
+  // Get the loop pre-header
+  auto *ph = L->getLoopPreheader();
+  // split the block and move every inst to @ph, except for the branch inst
+  Instruction *SplitPtr = &*ph->begin();
+  auto *pp = llvm::SplitBlock(ph, SplitPtr, DT, LI);
+  std::swap(pp, ph);
+  for (Instruction &I : *pp){
+    if (isa<TerminatorInst>(&I))
+      break;
+    I.moveBefore(&*ph->begin());
+  }
+  // pp is the pre preHeader
+  return pp;
 }
 
-// Given the original loop and the cloned loop
-// This function creates a call a function that performs a sampling
-// and insert code to decide which loop is executed!
-static void fill_control(BasicBlock *control) {
+// Creates a call to the sampling function
+//  - @F : The function
+//  - @pp : The loop pre preheader 
+//  - @L/@C : Original/Cloned loops
+static void fill_control(Function *F, BasicBlock *pp, Loop *L, Loop *C, LoopInfo *LI, DominatorTree *DT) {
+  Module *M = pp->getModule();
+  Function *fn = M->getFunction("__sampling");
 
+  llvm::SmallVector<Value*, 2> args;
+  for (Argument &arg : F->args())
+    args.push_back(&arg);
+
+  IRBuilder<> Builder (pp->getFirstNonPHI());
+  Value *n_zeros = Builder.CreateCall(fn, args, "n_zeros", nullptr);
+
+
+  // Create the conditional
+  auto *I32Ty = Type::getInt32Ty(F->getContext());
+  auto *cnt = ConstantInt::get(I32Ty, 500);
+  auto *cmp = Builder.CreateICmpUGT(n_zeros, cnt, "cmp");
+  auto *br = Builder.CreateCondBr(cmp, C->getLoopPreheader(), L->getLoopPreheader());
+  pp->getTerminator()->eraseFromParent();
 }
 
 /// \brief Clones the original loop \p OrigLoop structure
@@ -104,12 +130,7 @@ static void fixLoopBranches(Loop *ClonedLoop, BasicBlock *pre, ValueToValueMapTy
   SWAP_SUCCESSOR(pre, VMap);
 
   for (auto *BB : ClonedLoop->blocks()){
-    auto *br = BB->getTerminator();
-    for (unsigned i=0; i<br->getNumSuccessors(); ++i){
-      auto *suc = br->getSuccessor(i);
-      if (VMap[suc])
-        br->setSuccessor(i, cast<BasicBlock>(VMap[suc]));
-    }
+    SWAP_SUCCESSOR(BB, VMap);
   }
 
   for (auto L : ClonedLoop->getSubLoops()){
@@ -190,10 +211,10 @@ static Loop *cloneLoopWithPreheader(BasicBlock *Before, BasicBlock *LoopDomBB,
   }
 
   // Move them physically from the end of the block list.
-  F->getBasicBlockList().splice(Before->getIterator(), F->getBasicBlockList(),
-                                NewPH);
-  F->getBasicBlockList().splice(Before->getIterator(), F->getBasicBlockList(),
-                                NewLoop->getHeader()->getIterator(), F->end());
+  // F->getBasicBlockList().splice(Before->getIterator(), F->getBasicBlockList(),
+  //                               NewPH);
+  // F->getBasicBlockList().splice(Before->getIterator(), F->getBasicBlockList(),
+  //                               NewLoop->getHeader()->getIterator(), F->end());
 
   fixLoopBranches(NewLoop, NewPH, VMap);
 
@@ -213,27 +234,31 @@ void manual_profile(Function *F, LoopInfo *LI, DominatorTree *DT, const Geps &g,
     // already optimized
     if (loops.find(outer) != loops.end())
       continue;
+
+    errs() << *node << " -> " << outer->getName() << "\n";
     loops.insert(outer);
-
   }
-
-  errs() << "\n";
+  errs() << "loop length: " << loops.size() << "\n";
 
   for (Loop *L : loops) {
-    // p --> m --> h
-    auto *p = L->getLoopPreheader();
+    // pp --> ph --> h
+    auto *ph = L->getLoopPreheader();
     auto *h = L->getHeader(); 
-    // auto *m = split_pre_header(L, LI, DT);
+    auto *pp = split_pre_header(L, LI, DT);
     ValueToValueMapTy VMap;
     SmallVector<BasicBlock *, 32> Blocks;
-    Loop *c = phoenix::cloneLoopWithPreheader(p, p, L, VMap, ".c", LI, DT, Blocks);
-    print(L);
-    print(c);
+    Loop *C = phoenix::cloneLoopWithPreheader(pp, ph, L, VMap, ".c", LI, DT, Blocks);
+    fill_control(F, pp, L, C, LI, DT);
   }
 
-  // for (Argument &arg : F->args()){
-  //   errs() << arg << "\n";
-  // }
+  StoreInst *store = g.get_store_inst();
+  for (phoenix::Node *node : s){
+    Value *V = node->getValue();
+    Value *constraint = node->getConstraint();
+    if (F->getName() == "init_array")
+      insert_if(store, V, constraint);
+  }
+
 
   // for (const auto &node : s){
   //   errs() << "[" << F->getName() << "]:" << *node << "\n";
