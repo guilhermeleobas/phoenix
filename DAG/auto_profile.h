@@ -24,6 +24,8 @@
 
 #include "utils.h"
 
+namespace phoenix{
+
 #define SWITCH_NUM_CASES 3
 #define SWITCH_BB_PROFILE_INDEX 0
 #define SWITCH_BB_INDEX 1
@@ -339,3 +341,5 @@ void auto_profile(Function *F, const Geps &g, NodeSet &s){
 
   create_BBControl(F, BBProfile, switch_control_ptr, c1, c2);
 }
+
+}; // end namespace phoenix

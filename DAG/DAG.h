@@ -21,6 +21,7 @@ class DAG : public FunctionPass {
  
  private:
 
+  bool worth_insert_if(Geps &g, unsigned loop_threshold);
   void run_dag_opt(Function &F);
 
   void split(StoreInst *store);

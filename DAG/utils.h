@@ -24,6 +24,7 @@
 
 using namespace llvm;
 
+namespace phoenix{
 void remap_nodes(BasicBlock *BB, ValueToValueMapTy &VMap){
   for (Instruction &I : *BB) {
     for (unsigned i = 0; i < I.getNumOperands(); i++) {
@@ -50,3 +51,26 @@ BasicBlock *deep_clone(const BasicBlock *BB, ValueToValueMapTy &VMap,
   return clone;
 }
 
+Loop *get_outer_loop(LoopInfo *LI, BasicBlock *BB) {
+  Loop *L = LI->getLoopFor(BB);
+
+  BasicBlock *header = L->getHeader();
+  unsigned depth = L->getLoopDepth();
+  if (depth <= 1)
+    return L;
+
+  for (BasicBlock *pred : predecessors(header)) {
+    Loop *L2 = LI->getLoopFor(pred);
+
+    if (L2 == nullptr)
+      continue;
+
+    if (L2->getLoopDepth() < depth) {
+      return get_outer_loop(LI, pred);
+    }
+  }
+
+  llvm_unreachable("unreachable state");
+}
+
+}; // end namespace phoenix

@@ -26,6 +26,8 @@
 
 using namespace llvm;
 
+namespace phoenix {
+
 llvm::SmallVector<Instruction *, 10> mark_instructions_to_be_moved(
     StoreInst *store) {
   std::queue<Instruction *> q;
@@ -156,17 +158,6 @@ void insert_if(StoreInst *store, Value *v, Value *constraint) {
   move_from_prev_to_then(BBPrev, BBThen);
 }
 
-// This should implement a cost model
-// Right now we only insert the `if` if the depth is >= threshold(1)
-// TO-DO: Use a more sophisticated solution
-bool worth_insert_if(Geps &g, unsigned loop_threshold = 1) {
-  if (g.get_loop_depth() >= loop_threshold) return true;
-
-  DEBUG(dbgs() << "skipping: " << *g.get_instruction() << "\n"
-               << " threshold " << g.get_loop_depth() << " is not greater than "
-               << loop_threshold << "\n\n");
-  return false;
-}
 
 void no_profile(Function *F, const Geps &g, NodeSet &s){
   for (auto &node : s){
@@ -176,3 +167,5 @@ void no_profile(Function *F, const Geps &g, NodeSet &s){
     insert_if(g.get_store_inst(), value, constraint);
   }
 }
+
+}; // end namespace phoenix

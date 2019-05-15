@@ -50,6 +50,18 @@ cl::opt<OptType> DagInstrumentation(
                    clEnumValN(OptType::Manual, "manual",
                               "profile using a handwritten function call")));
 
+// This should implement a cost model
+// Right now we only insert the `if` if the depth is >= threshold(1)
+// TO-DO: Use a more sophisticated solution
+bool DAG::worth_insert_if(Geps &g, unsigned loop_threshold = 1) {
+  if (g.get_loop_depth() >= loop_threshold) return true;
+
+  DEBUG(dbgs() << "skipping: " << *g.get_instruction() << "\n"
+               << " threshold " << g.get_loop_depth() << " is not greater than "
+               << loop_threshold << "\n\n");
+  return false;
+}
+
 void DAG::update_passes(BasicBlock *from, BasicBlock *to){
   // update LoopInfo
   Loop *L = this->LI->getLoopFor(from);
@@ -111,10 +123,10 @@ void DAG::run_dag_opt(Function &F) {
         phoenix::manual_profile(&F, this->LI, this->DT, g, s);
         break;
       case OptType::Automatic:
-        auto_profile(&F, g, s);
+        phoenix::auto_profile(&F, g, s);
         break;
       default:
-        no_profile(&F, g, s);
+        phoenix::no_profile(&F, g, s);
     }
   }
 }

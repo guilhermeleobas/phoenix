@@ -38,27 +38,12 @@ do {                                                   \
 
 namespace phoenix{
 
-static Loop *get_outer_loop(LoopInfo *LI, BasicBlock *BB) {
-  Loop *L = LI->getLoopFor(BB);
-
-  BasicBlock *header = L->getHeader();
-  unsigned depth = L->getLoopDepth();
-  if (depth <= 1)
-    return L;
-
-  for (BasicBlock *pred : predecessors(header)) {
-    Loop *L2 = LI->getLoopFor(pred);
-
-    if (L2 == nullptr)
-      continue;
-
-    if (L2->getLoopDepth() < depth) {
-      return get_outer_loop(LI, pred);
-    }
-  }
-
-  llvm_unreachable("unreachable state");
-}
+struct OuterLoopStructure {
+  BasicBlock *pp; // the pre preHeader
+  Loop *L;
+  Loop *C;
+  ValueToValueMapTy VMap;
+};
 
 static BasicBlock *split_pre_header(Loop *L, LoopInfo *LI, DominatorTree *DT) {
   // Get the loop pre-header
@@ -223,46 +208,46 @@ static Loop *cloneLoopWithPreheader(BasicBlock *Before, BasicBlock *LoopDomBB,
 
 void manual_profile(Function *F, LoopInfo *LI, DominatorTree *DT, const Geps &g,
                     NodeSet &s) {
+
   // Store the loops already processed
-  SmallSet<Loop *, 5> loops;
+  //  - Each key/valeu in this map represents the most outer loop
+  //    as the key and the value is a struct that stores the necessary
+  //    info to perform the optimization later on. 
+  //  - The key is a pointer to the original loop, not the cloned one!
+  static std::map<Loop *, OuterLoopStructure*> processed_loops;
 
-  for (phoenix::Node *node : s) {
-    DUMP(F, node);
-    Instruction *I = node->getInst();
-    Loop *outer = get_outer_loop(LI, I->getParent());
 
-    // already optimized
-    if (loops.find(outer) != loops.end())
-      continue;
+  for (auto &node : s){
+    Loop *L = get_outer_loop(LI, node->getInst()->getParent());
 
-    errs() << *node << " -> " << outer->getName() << "\n";
-    loops.insert(outer);
-  }
-  errs() << "loop length: " << loops.size() << "\n";
+    if (processed_loops.find(L) == processed_loops.end()){
+      DUMP(F, node);
+      // needs to clone the loop
 
-  for (Loop *L : loops) {
-    // pp --> ph --> h
-    auto *ph = L->getLoopPreheader();
-    auto *h = L->getHeader(); 
-    auto *pp = split_pre_header(L, LI, DT);
-    ValueToValueMapTy VMap;
-    SmallVector<BasicBlock *, 32> Blocks;
-    Loop *C = phoenix::cloneLoopWithPreheader(pp, ph, L, VMap, ".c", LI, DT, Blocks);
-    fill_control(F, pp, L, C, LI, DT);
+      OuterLoopStructure *st = new OuterLoopStructure();
+
+      // pp -> ph -> h
+      auto *ph = L->getLoopPreheader();
+      auto *h = L->getHeader();
+      auto *pp = split_pre_header(L, LI, DT);
+      SmallVector<BasicBlock*, 32> Blocks;
+      Loop *C = phoenix::cloneLoopWithPreheader(pp, ph, L, st->VMap, ".c", LI, DT, Blocks);
+      fill_control(F, pp, L, C, LI, DT);
+
+      st->pp = pp;
+      st->L = L;
+      st->C = C;
+
+      processed_loops[L] = st;
+    }
   }
 
   StoreInst *store = g.get_store_inst();
-  for (phoenix::Node *node : s){
+  for (auto &node : s){
     Value *V = node->getValue();
-    Value *constraint = node->getConstraint();
-    if (F->getName() == "init_array")
-      insert_if(store, V, constraint);
+    Value *cnt = node->getConstraint();
+    insert_if(store, V, cnt);
   }
-
-
-  // for (const auto &node : s){
-  //   errs() << "[" << F->getName() << "]:" << *node << "\n";
-  // }
 }
 
 }; // end namespace phoenix;
