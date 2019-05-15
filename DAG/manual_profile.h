@@ -79,8 +79,8 @@ static void fill_control(Function *F, BasicBlock *pp, Loop *L, Loop *C, LoopInfo
 
   // Create the conditional
   auto *I32Ty = Type::getInt32Ty(F->getContext());
-  auto *cnt = ConstantInt::get(I32Ty, 500);
-  auto *cmp = Builder.CreateICmpUGT(n_zeros, cnt, "cmp");
+  auto *threshold = ConstantInt::get(I32Ty, 500);
+  auto *cmp = Builder.CreateICmpUGT(n_zeros, threshold, "cmp");
   auto *br = Builder.CreateCondBr(cmp, C->getLoopPreheader(), L->getLoopPreheader());
   pp->getTerminator()->eraseFromParent();
 }
@@ -217,36 +217,37 @@ void manual_profile(Function *F, LoopInfo *LI, DominatorTree *DT, const Geps &g,
   static std::map<Loop *, OuterLoopStructure*> processed_loops;
 
 
-  for (auto &node : s){
-    Loop *L = get_outer_loop(LI, node->getInst()->getParent());
+  auto &first_node = *s.begin();
+  Loop *L = get_outer_loop(LI, first_node->getInst()->getParent());
 
-    if (processed_loops.find(L) == processed_loops.end()){
-      DUMP(F, node);
-      // needs to clone the loop
+  if (processed_loops.find(L) == processed_loops.end()){
+    DUMP(F, first_node);
+    // needs to clone the loop
 
-      OuterLoopStructure *st = new OuterLoopStructure();
+    OuterLoopStructure *st = new OuterLoopStructure();
 
-      // pp -> ph -> h
-      auto *ph = L->getLoopPreheader();
-      auto *h = L->getHeader();
-      auto *pp = split_pre_header(L, LI, DT);
-      SmallVector<BasicBlock*, 32> Blocks;
-      Loop *C = phoenix::cloneLoopWithPreheader(pp, ph, L, st->VMap, ".c", LI, DT, Blocks);
-      fill_control(F, pp, L, C, LI, DT);
+    // pp -> ph -> h
+    auto *ph = L->getLoopPreheader();
+    auto *h = L->getHeader();
+    auto *pp = split_pre_header(L, LI, DT);
+    SmallVector<BasicBlock*, 32> Blocks;
+    Loop *C = phoenix::cloneLoopWithPreheader(pp, ph, L, st->VMap, ".c", LI, DT, Blocks);
+    fill_control(F, pp, L, C, LI, DT);
 
-      st->pp = pp;
-      st->L = L;
-      st->C = C;
+    st->pp = pp;
+    st->L = L;
+    st->C = C;
 
-      processed_loops[L] = st;
-    }
+    processed_loops[L] = st;
   }
 
-  StoreInst *store = g.get_store_inst();
+  auto *st = processed_loops[L];
+
+  StoreInst *store = cast<StoreInst>(st->VMap[g.get_store_inst()]);
   for (auto &node : s){
     Value *V = node->getValue();
     Value *cnt = node->getConstraint();
-    insert_if(store, V, cnt);
+    insert_if(store, st->VMap[V], cnt);
   }
 }
 
