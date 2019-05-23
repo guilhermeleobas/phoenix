@@ -80,16 +80,47 @@ If we use RangeAnalysis, we can drop check 4 when the base pointers are the same
 
 ### `CountArith`
 
-This is a profiler that I wrote to see if the static analysis is indeed detecting this correctly. For instance, we can see at runtime if one of the operands indeed was loaded from the same memory address that it's being written. We also track how many times the instruction took the identity as one of the operands.
+This is a profiler that I wrote to see if the static analysis is detecting the pattern correctly. For instance, we can see at runtime if one of the operands indeed was loaded from the same memory address that it's being written. We also track how many times the instruction took the identity as one of the operands.
 
 Each program that uses this LLVM pass must be linked with `/Collect/collect.c` because that's where the logic behind the profiler is. In this LLVm pass, we only add calls to the functions defined there.
 
 In summary, for each instruction marked as interesting by our static analysis, we add a call to a function defined in `Collect/collect.c`.
 
-## Next steps
+### `DAG`
 
-Our next step is to write an LLVM pass that will optimize this pattern. But there are still room to improve in the static analysis.
+This is where I keep all the logic to optimize this pattern. There are currently three approachs implemented to optimize this pattern and they will be describe and they all rely on some auxiliar files:
+
+- DAG/node.cpp: Wrapper for a LLVM::Value or LLVM::Instruction into a node in the Tree.
+- DAG/parser.cpp: Given a start point (the store instruction), builds the **expression tree** walking backwards in the operands of the store.
+- DAG/visitor.h: The abstract interface for the visitor pattern
+- DAG/dotVisitor.h: Generates a dot from the Tree to visualize it
+- DAG/propagateAnalysisVisitor.h: Walks on the **Tree** and mark every node that when it equals to the identity, "kills" the entire expression
+- DAG/depthVisitor.h: Walks the tree capturing the nodes that *hasConstant()* returns true. Note, this has nothing to do with constraint analysis.
+- DAG/constantWrapper.h: Just a wrapper for a LLVM::Constant
+
+We currently have three different approaches implemented for optimizing this pattern.
+1. **insertIf.cpp**: Implements the most trivial idea: Add a conditional before the store checking if the value that we are writting is already in memory (a silent store check basically). 
+2. **insertIf.cpp**: Implements the most trivial idea(2): For every node that hasConstant() returns true, insert a conditional on it
+3. **auto_profile.cpp**: The problem with the trivial approach is that our optimization is speculative, thus it depends on the values given to the program at runtime. To overcome this, we clone the basic block and insert code to profile it at runtime. After profiling, one can decide on what instructions worth insert the conditional. 
+```
+Loop Header --> BB --> Loop Latch --+
+   ^--------------------------------|
+```
+
+After optimization: 
+```
+Loop Header --> BB --> Loop Latch  --+
+   ^        +-> BBOpt --^    ^       |
+   ^        +-> BBProfile ---^       |
+   ^---------------------------------|
+```
+
+To summarize: the idea is that we keep the original basic block (the one with the arithmetic expression), a copy of it in which we optimized it (BBOpt) and a third one which we profile the instructions for a few iterations. After those iterations, one can decide if it is best to always execute the original basic block (BB) or the optimzed one (BBOpt). 
+
+4. **manual_profile.cpp**: The problem of the auto_profile.cpp is that we do profilling in the same loop that the original basic block is and this can prevent vectorization from happening. The ideia is to profile the basic block outside the loop. I am still implement this idea but involves performing a program slice in the loop to a function and keep only the necessary instructions to profile a specific array/matrix.
 
 ## Benchmarks
 
 We have a [collection of more than 200 benchmarks](https://github.com/guilhermeleobas/Benchmarks) in another repo. We also have developed a [simple framework](https://github.com/guilhermeleobas/tf) written in bash that one can easily compile, instrument, profile, execute those benchmarks.
+
+We have expressive gains on PolyBench. On **cholesky.c** for instance, the speedup is about 80% when compared to the same benchmark compiled with -O3.

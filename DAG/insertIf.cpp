@@ -130,15 +130,15 @@ void move_from_prev_to_then(BasicBlock *BBPrev, BasicBlock *BBThen) {
   }
 }
 
-void insert_if(StoreInst *store, Value *v, Value *constraint) {
+void insert_if(StoreInst *store, Value *v, Value *constant) {
   IRBuilder<> Builder(store);
 
   Value *cmp;
 
   if (v->getType()->isFloatingPointTy()) {
-    cmp = Builder.CreateFCmpONE(v, constraint);
+    cmp = Builder.CreateFCmpONE(v, constant);
   } else {
-    cmp = Builder.CreateICmpNE(v, constraint);
+    cmp = Builder.CreateICmpNE(v, constant);
   }
 
   TerminatorInst *br = llvm::SplitBlockAndInsertIfThen(
@@ -168,8 +168,8 @@ void no_profile(Function *F, const Geps &g, NodeSet &s){
   for (auto &node : s){
     StoreInst *store = g.get_store_inst();
     Value *value = node->getValue();
-    Value *constraint = node->getConstraint();
-    insert_if(g.get_store_inst(), value, constraint);
+    Value *constant = node->getConstant();
+    insert_if(g.get_store_inst(), value, constant);
   }
 }
 

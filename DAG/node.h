@@ -15,7 +15,7 @@
 using namespace llvm;
 
 #include "visitor.h"
-#include "constraint.h"
+#include "constantWrapper.h"
 #include "../Identify/Position.h"
 
 class Visitor;
@@ -53,7 +53,7 @@ class Counter{
 // };
 
 
-class Node: public Counter, public Constraint {
+class Node: public Counter, public ConstantWrapper {
  public:
   enum NodeKind {
     NK_UnaryNode,

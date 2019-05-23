@@ -25,7 +25,7 @@
 #include <tuple>
 
 #include "DAG.h"
-#include "constraintVisitor.h"
+#include "propagateAnalysisVisitor.h"
 #include "depthVisitor.h"
 #include "dotVisitor.h"
 #include "insertIf.h"
@@ -113,7 +113,7 @@ void DAG::run_dag_opt(Function &F) {
     phoenix::StoreNode *store =
         cast<phoenix::StoreNode>(myParser(g.get_store_inst(), g.get_operand_pos()));
 
-    ConstraintVisitor cv(store, &g);
+    propagateAnalysisVisitor cv(store, &g);
     DepthVisitor dv(store);
 
     NodeSet s = dv.getSet();

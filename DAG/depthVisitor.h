@@ -20,19 +20,19 @@ class DepthVisitor : public Visitor {
  private:
 
   void visit(phoenix::StoreNode *store) override {
-    if (store->child->hasConstraint())
+    if (store->child->hasConstant())
       store->child->accept(*this);
   }
 
   void visit(phoenix::UnaryNode *unary) override {
-    if (!unary->hasConstraint())
+    if (!unary->hasConstant())
       return;
     
-    if (unary->child->hasConstraint()){
+    if (unary->child->hasConstant()){
       unary->child->accept(*this);
     }
     else {
-      s.insert(unary); // We already know at this point that unary has a constraint
+      s.insert(unary); // We already know at this point that unary has a Constant
     }
   }
 
@@ -41,10 +41,10 @@ class DepthVisitor : public Visitor {
   }
 
   void visit(phoenix::BinaryNode *binary) override {
-    if (!binary->hasConstraint())
+    if (!binary->hasConstant())
       return;
     
-    if(!binary->left->hasConstraint() && !binary->right->hasConstraint()){
+    if(!binary->left->hasConstant() && !binary->right->hasConstant()){
       s.insert(binary);
       return;
     }
@@ -55,13 +55,13 @@ class DepthVisitor : public Visitor {
   }
 
   void visit(phoenix::TargetOpNode *target) override {
-    if (target->getOther()->hasConstraint()){
+    if (target->getOther()->hasConstant()){
       target->getOther()->accept(*this);
     }
   }
 
   void visit(phoenix::TerminalNode *term) override {
-    if (term->hasConstraint()){
+    if (term->hasConstant()){
       s.insert(term);
     }
   }

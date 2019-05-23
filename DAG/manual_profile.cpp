@@ -392,7 +392,7 @@ void manual_profile(Function *F, LoopInfo *LI, DominatorTree *DT, const Geps &g,
     auto y = markInstructions(L, node->getInst());
 
     Value *V = node->getValue();
-    Value *cnt = node->getConstraint();
+    Value *cnt = node->getConstant();
     insert_if(store, st->VMap[V], cnt);
   }
 }

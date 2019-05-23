@@ -115,9 +115,9 @@ AllocaInst *create_c1(Function *F, BasicBlock *BBProfile) {
   return c1_ptr;
 }
 
-// Create and increment c2 when V == constraint
+// Create and increment c2 when V == constant
 AllocaInst *create_c2(Function *F, BasicBlock *BBProfile, Value *V,
-                           Value *constraint) {
+                           Value *constant) {
   IRBuilder<> Builder(F->getEntryBlock().getFirstNonPHI());
 
   auto *I32Ty = Type::getInt32Ty(F->getContext());
@@ -133,9 +133,9 @@ AllocaInst *create_c2(Function *F, BasicBlock *BBProfile, Value *V,
 
   Value *cmp;
   if (V->getType()->isFloatingPointTy())
-    cmp = Builder.CreateFCmpOEQ(V, constraint, "cmp.profile");
+    cmp = Builder.CreateFCmpOEQ(V, constant, "cmp.profile");
   else
-    cmp = Builder.CreateICmpEQ(V, constraint, "cmp.profile");
+    cmp = Builder.CreateICmpEQ(V, constant, "cmp.profile");
 
   Value *select = Builder.CreateSelect(cmp, zero, one);
 
@@ -149,16 +149,16 @@ AllocaInst *create_c2(Function *F, BasicBlock *BBProfile, Value *V,
 // @F : A pointer to the function @BB lives in
 // @BB : The original basic block
 // @V : The llvm value that "kills" the expression
-// @constraint: the value that @V must hold to kill the expression
+// @constant: the value that @V must hold to kill the expression
 //
 // This method creates a copy of @BB, which we called it @BBProfile
 // and insert counters c1 and c2 to:
 //   - @c1: Count the number of times @BBProfile executes.
-//   - @c2: Count the number of times @V == @constraint
+//   - @c2: Count the number of times @V == @onstraint
 std::pair<Value*, Value*> create_BBProfile(Function *F, ValueToValueMapTy &VMap, BasicBlock *BBProfile, Value *V,
-                      Value *constraint) {
+                      Value *constant) {
   Value *c1 = create_c1(F, BBProfile);
-  Value *c2 = create_c2(F, BBProfile, cast<Value>(VMap[V]), constraint);
+  Value *c2 = create_c2(F, BBProfile, cast<Value>(VMap[V]), constant);
 
   return std::make_pair(c1, c2);
 }
@@ -167,12 +167,12 @@ std::pair<Value*, Value*> create_BBProfile(Function *F, ValueToValueMapTy &VMap,
 // @BB : The original basic block
 // @store : A pointer to the store that leads to @V
 // @V : The llvm value that "kills" the expression
-// @constraint: the value that @V must hold to kill the expression
+// @constant: the value that @V must hold to kill the expression
 //
 // Returns a clone of @BB with the conditional. See `insert_if` for more info.
 void create_BBOpt(ValueToValueMapTy &VMap, StoreInst *store, Value *V,
-                       Value *constraint) {
-  insert_if(cast<StoreInst>(VMap[store]), VMap[V], constraint);
+                       Value *constant) {
+  insert_if(cast<StoreInst>(VMap[store]), VMap[V], constant);
 }
 
 // @F : A pointer to the function @BB lives in
@@ -182,7 +182,7 @@ void create_BBOpt(ValueToValueMapTy &VMap, StoreInst *store, Value *V,
 //   1 => jumps to BB
 //   2 => jumps to BBOpt
 // @c1 : # of times @BBProfile were executed
-// @c2 : # of times @V == @constraint on @BBProfile
+// @c2 : # of times @V == @constant on @BBProfile
 // @n_iter : max. number of iterations of @BBProfile
 // @gap : The minimum difference between @c1 and @c2 to use BBOpt instead of
 // BB.
@@ -323,17 +323,17 @@ void auto_profile(Function *F, const Geps &g, NodeSet &s){
   ValueToValueMapTy VMapProfile;
   BasicBlock *BBProfile = deep_clone(BB, VMapProfile, ".profile", F);
 
-  assert(node->hasConstraint() && "Node do not have a constraint");
+  assert(node->hasConstant() && "Node do not have a constant");
 
   create_phi_nodes(F, BB, BBProfile, BBOpt, VMapProfile, VMapOpt);
 
   create_BBOpt(VMapOpt, g.get_store_inst(), node->getValue(),
-               node->getConstraint());
+               node->getConstant());
 
   Value *V = node->getValue();
-  Value *constraint = node->getConstraint();
+  Value *constant = node->getConstant();
 
-  auto p = create_BBProfile(F, VMapProfile, BBProfile, V, constraint);
+  auto p = create_BBProfile(F, VMapProfile, BBProfile, V, constant);
   Value *c1 = p.first;
   Value *c2 = p.second;
 

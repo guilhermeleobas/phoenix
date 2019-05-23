@@ -1,7 +1,7 @@
 #pragma once
 
 #include "visitor.h"
-#include "constraint.h"
+#include "constantWrapper.h"
 
 // Converts a constant of value *v(T) from type T -> t
 // This converts things such as float 0.0000 to int 0
@@ -51,7 +51,6 @@ Value* getDestructor(Instruction *I){
   default:
     // errs() << "No destructor for: " << *I << "\n";
     return nullptr;
-    // return constraintValue();
     std::string str = "No destructor for: ";
     llvm::raw_string_ostream rso(str);
     I->print(rso);
@@ -94,19 +93,18 @@ Value* getIdentity(Instruction *I, const Geps *g) {
 }
 
 
-class ConstraintVisitor : public Visitor {
+class propagateAnalysisVisitor : public Visitor {
  public:
-  // constraintValue id;
   Value *id = nullptr;
 
-  ConstraintVisitor(phoenix::StoreNode *store, const Geps *g) {
+  propagateAnalysisVisitor(phoenix::StoreNode *store, const Geps *g) {
     phoenix::Node *child = store->child;
     id = getIdentity(child->getInst(), g);
     store->accept(*this);
   }
 
   void visit(phoenix::StoreNode *store) override {
-    store->setConstraint(id);
+    store->setConstant(id);
     store->child->accept(*this);
   }
 
@@ -118,7 +116,7 @@ class ConstraintVisitor : public Visitor {
     Value *des = getDestructor(unary->getInst());
 
     if (des == id){
-      unary->setConstraint(id);
+      unary->setConstant(id);
       unary->child->accept(*this);
     }
 
@@ -126,7 +124,7 @@ class ConstraintVisitor : public Visitor {
 
   void visit(phoenix::CastNode *cast) override {
     Instruction *I = cast->getInst();
-    cast->setConstraint(id);
+    cast->setConstant(id);
     Value *conv = convert(id, cast->child->getValue());
     if (conv != nullptr){
       Value *other = id;
@@ -143,7 +141,7 @@ class ConstraintVisitor : public Visitor {
     Value *des = getDestructor(binary->getInst());
 
     if (des == id){
-      binary->setConstraint(id);
+      binary->setConstant(id);
       binary->left->accept(*this);
       binary->right->accept(*this);
     }
@@ -170,13 +168,13 @@ class ConstraintVisitor : public Visitor {
     //     }
     // }
 
-    target->setConstraint(id);
+    target->setConstant(id);
 
     target->getOther()->accept(*this);
   }
 
   void visit(phoenix::TerminalNode *term) override {
-    term->setConstraint(id);
+    term->setConstant(id);
   }
   
   void visit(phoenix::LoadNode *load) override {
@@ -193,11 +191,11 @@ class ConstraintVisitor : public Visitor {
 
   void visit(phoenix::ConstantNode *c) override {
     if (id == c->getValue())
-      c->setConstraint(id);
+      c->setConstant(id);
   }
 
   void visit(phoenix::ConstantIntNode *c) override {
     if (id == c->getValue())
-      c->setConstraint(id);
+      c->setConstant(id);
   }
 };

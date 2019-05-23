@@ -18,7 +18,7 @@
 using namespace llvm;
 
 #include "visitor.h"
-#include "constraint.h"
+#include "constantWrapper.h"
 
 
 #define TAB "  "
@@ -45,7 +45,7 @@ using namespace llvm;
   + "]" \
 
 #define COLOR(node) \
-  (node->hasConstraint() ? "blue" : "black")
+  (node->hasConstant() ? "blue" : "black")
 
 #define ID(node) \
   (std::to_string(node->getID()))

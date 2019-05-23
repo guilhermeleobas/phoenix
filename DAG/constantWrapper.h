@@ -1,21 +1,21 @@
 #pragma once
 
-class Constraint{
+class ConstantWrapper{
  private:
   Value *c = nullptr;
 
  public:
 
-  void setConstraint(Value *c){
+  void setConstant(Value *c){
     this->c = c;
 
   }
 
-  Value* getConstraint(void) const {
+  Value* getConstant(void) const {
     return c;
   }
 
-  bool hasConstraint(void) const {
+  bool hasConstant(void) const {
     return c != nullptr;
   }
 
