@@ -118,6 +118,9 @@ void DAG::run_dag_opt(Function &F) {
 
     NodeSet s = dv.getSet();
 
+    DotVisitor dot(store);
+    dot.print();
+
     switch (DagInstrumentation){
       case OptType::Manual:
         phoenix::manual_profile(&F, this->LI, this->DT, g, s);
