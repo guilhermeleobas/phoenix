@@ -22,6 +22,7 @@
 #include <queue>
 
 #include "manual_profile.h"
+#include "dependency.h"
 #include "utils.h"
 
 using namespace llvm;
@@ -38,9 +39,6 @@ do {                                                   \
     br->setSuccessor(i, cast<BasicBlock>(VMap[suc]));  \
   }                                                    \
 } while (0)                                            \
-
-#define CONTAINS(container, value) \
-  (std::find(container.begin(), container.end(), value) != container.end())
 
 namespace phoenix{
 
@@ -108,7 +106,7 @@ static void fill_control(Function *F, BasicBlock *pp, Loop *L, Loop *C, LoopInfo
 
 /// \brief Clones the original loop \p OrigLoop structure
 /// and keeps it ready to add the basic blocks.
-static void createNewLoops(Loop *OrigLoop, LoopInfo *LI, Loop *ParentLoop,
+static void create_new_loops(Loop *OrigLoop, LoopInfo *LI, Loop *ParentLoop,
    std::map<Loop*, Loop*>  &ClonedLoopMap) {
   if (OrigLoop->empty()) return;
 
@@ -118,7 +116,7 @@ static void createNewLoops(Loop *OrigLoop, LoopInfo *LI, Loop *ParentLoop,
     ClonedLoopMap[CurrLoop] = NewLoop;
 
     // Recursively add the new loops.
-    createNewLoops(CurrLoop, LI, NewLoop, ClonedLoopMap);
+    create_new_loops(CurrLoop, LI, NewLoop, ClonedLoopMap);
   }
 }
 
@@ -130,7 +128,7 @@ static void print(Loop *L){
   errs() << "\n";
 }
 
-static void fixLoopBranches(Loop *ClonedLoop, BasicBlock *pre, ValueToValueMapTy &VMap){
+static void fix_loop_branches(Loop *ClonedLoop, BasicBlock *pre, ValueToValueMapTy &VMap){
   // errs() << "cloned: " << *ClonedLoop << "\n";
 
   SWAP_SUCCESSOR(pre, VMap);
@@ -140,7 +138,7 @@ static void fixLoopBranches(Loop *ClonedLoop, BasicBlock *pre, ValueToValueMapTy
   }
 
   for (auto L : ClonedLoop->getSubLoops()){
-    fixLoopBranches(L, L->getLoopPreheader(), VMap);
+    fix_loop_branches(L, L->getLoopPreheader(), VMap);
   }
 }
 
@@ -149,7 +147,7 @@ static void fixLoopBranches(Loop *ClonedLoop, BasicBlock *pre, ValueToValueMapTy
 ///
 /// Updates LoopInfo and DominatorTree assuming the loop is dominated by block
 /// \p LoopDomBB.  Insert the new blocks before block specified in \p Before.
-static Loop *cloneLoopWithPreheader(BasicBlock *Before, BasicBlock *LoopDomBB,
+static Loop *clone_loop_with_preheader(BasicBlock *Before, BasicBlock *LoopDomBB,
                                    Loop *OrigLoop, ValueToValueMapTy &VMap,
                                    const Twine &NameSuffix, LoopInfo *LI,
                                    DominatorTree *DT,
@@ -171,7 +169,7 @@ static Loop *cloneLoopWithPreheader(BasicBlock *Before, BasicBlock *LoopDomBB,
   ClonedLoopMap[OrigLoop] = NewLoop;
 
   // Recursively clone the loop structure.
-  createNewLoops(OrigLoop, LI, NewLoop, ClonedLoopMap);
+  create_new_loops(OrigLoop, LI, NewLoop, ClonedLoopMap);
 
   BasicBlock *OrigPH = OrigLoop->getLoopPreheader();
   assert(OrigPH && "No preheader");
@@ -222,7 +220,7 @@ static Loop *cloneLoopWithPreheader(BasicBlock *Before, BasicBlock *LoopDomBB,
   // F->getBasicBlockList().splice(Before->getIterator(), F->getBasicBlockList(),
   //                               NewLoop->getHeader()->getIterator(), F->end());
 
-  fixLoopBranches(NewLoop, NewPH, VMap);
+  fix_loop_branches(NewLoop, NewPH, VMap);
 
   return NewLoop;
 }
@@ -230,7 +228,7 @@ static Loop *cloneLoopWithPreheader(BasicBlock *Before, BasicBlock *LoopDomBB,
 
 /// \brief Given a Value *V, find all the matrices and arrays that builds *V and returns
 /// its types
-static std::vector<Type*> getFunctionType(Node *node){
+static std::vector<Type*> get_function_types(Node *node){
   std::queue<Node*> q;
   std::vector<Type*> T;
 
@@ -262,73 +260,13 @@ static std::vector<Type*> getFunctionType(Node *node){
   return T;
 }
 
-/// \brief Given a Loop *L and an instruction *I, this method returns the set of instructions
-/// that are not necessary to compute *I
-static std::vector<Instruction*> markInstructions(Loop *L, Instruction *I){
-  std::vector<Instruction*> preserve, marked, stores;
-
-  preserve.push_back(I);
-
-  {
-    std::queue<Instruction*> q;
-    q.push(I);
-    while (!q.empty()){
-      Instruction *I = q.front();
-      q.pop();
-
-      for (Use &u : I->operands()){
-        if (!isa<Instruction>(&u))
-          continue;
-        Instruction *op = cast<Instruction>(&u);
-        if (CONTAINS(preserve, op)){
-          preserve.push_back(op);
-          q.push(op);
-        }
-      }
-    }
-  }
-
-  for (auto &BB : L->getBlocks())
-    for (auto &I : *BB)
-      if (isa<StoreInst>(I))
-        stores.push_back(&I);
-
-  {
-    std::queue<Instruction*> q;
-
-    for(Instruction *I : stores)
-      q.push(I);
-
-    while (!q.empty()){
-      Instruction *I = q.front();
-      q.pop();
-
-      for (Use &u : I->operands()){
-        if (!isa<Instruction>(u))
-          continue;
-
-        Instruction *op = cast<Instruction>(&u);
-        if (CONTAINS(preserve, op))
-          continue;
-
-        if (!CONTAINS(marked, op)){
-          marked.push_back(op);
-          q.push(op);
-        }
-      }
-    }
-  }
-
-  return marked;
-}
-
 /// \brief Given a Loop *L and an Instruction *I, this method creates a new function @F
 /// with a copy of *L inside of it to keep track of how many times *I == 0.0
 /// 
 /// Optimizations: Given that one can one keep track of the values of *I during
 /// iterations. One can remove all the variables from @F whose *I does not have a
 /// direct depende
-static Function* createFunction(Loop *L, phoenix::Node *node){
+static Function* create_function(Loop *L, Node *node){
   // auto types = getFunctionType(node);
   // Instruction *I = node->getInst();
 
@@ -342,13 +280,13 @@ static Function* createFunction(Loop *L, phoenix::Node *node){
 /// compute another inst in the nodeset @s
 ///
 /// to-do: move the loop to a function
-static void createProfileFunction(Loop *L, LoopInfo *LI, DominatorTree *DT,
+static void create_profile_loop(Loop *L, LoopInfo *LI, DominatorTree *DT,
                                   NodeSet &s){
 
 }
 
-void manual_profile(Function *F, LoopInfo *LI, DominatorTree *DT, const Geps &g,
-                    NodeSet &s) {
+void manual_profile(Function *F, LoopInfo *LI, DominatorTree *DT, PostDominatorTree *PDT, 
+                    const Geps &g, NodeSet &s) {
 
   // Store the loops already processed
   //  - Key is a pointer to the (original) most outer loop. 
@@ -362,39 +300,40 @@ void manual_profile(Function *F, LoopInfo *LI, DominatorTree *DT, const Geps &g,
   auto &first_node = *s.begin();
   Loop *L = get_outer_loop(LI, first_node->getInst()->getParent());
 
-  if (processed_loops.find(L) == processed_loops.end()){
-    DUMP(F, first_node);
-    // needs to clone the loop
+  // if (processed_loops.find(L) == processed_loops.end()){
+  //   DUMP(F, first_node);
+  //   // needs to clone the loop
 
-    auto *st = new LoopOptProperties();
+  //   auto *st = new LoopOptProperties();
 
-    // pp -> ph -> h
-    auto *ph = L->getLoopPreheader();
-    auto *h = L->getHeader();
-    auto *pp = split_pre_header(L, LI, DT);
-    SmallVector<BasicBlock*, 32> Blocks;
-    Loop *C = phoenix::cloneLoopWithPreheader(pp, ph, L, st->VMap, ".c", LI, DT, Blocks);
-    fill_control(F, pp, L, C, LI, DT);
+  //   // pp -> ph -> h
+  //   auto *ph = L->getLoopPreheader();
+  //   auto *h = L->getHeader();
+  //   auto *pp = split_pre_header(L, LI, DT);
+  //   SmallVector<BasicBlock*, 32> Blocks;
+  //   Loop *C = phoenix::clone_loop_with_preheader(pp, ph, L, st->VMap, ".c", LI, DT, Blocks);
+  //   fill_control(F, pp, L, C, LI, DT);
 
-    st->pp = pp;
-    st->L = L;
-    st->C = C;
+  //   st->pp = pp;
+  //   st->L = L;
+  //   st->C = C;
 
-    processed_loops[L] = st;
-  }
+  //   processed_loops[L] = st;
+  // }
 
-  auto *st = processed_loops[L];
+  // auto *st = processed_loops[L];
 
-  StoreInst *store = cast<StoreInst>(st->VMap[g.get_store_inst()]);
-  for (auto &node : s){
+  Dependency D(F, PDT);
 
-    auto x = getFunctionType(node);
-    auto y = markInstructions(L, node->getInst());
+  // StoreInst *store = cast<StoreInst>(st->VMap[g.get_store_inst()]);
+  // for (auto &node : s){
 
-    Value *V = node->getValue();
-    Value *cnt = node->getConstant();
-    insert_if(store, st->VMap[V], cnt);
-  }
+    // auto x = get_function_types(node);
+
+    // Value *V = node->getValue();
+    // Value *cnt = node->getConstant();
+    // insert_if(store, st->VMap[V], cnt);
+  // }
 }
 
-}
+} // namespace phoenix

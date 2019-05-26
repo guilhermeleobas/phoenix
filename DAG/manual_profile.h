@@ -52,30 +52,30 @@ static void fill_control(Function *F, BasicBlock *pp, Loop *L, Loop *C, LoopInfo
 
 /// \brief Clones the original loop \p OrigLoop structure
 /// and keeps it ready to add the basic blocks.
-static void createNewLoops(Loop *OrigLoop, LoopInfo *LI, Loop *ParentLoop,
+static void create_new_loops(Loop *OrigLoop, LoopInfo *LI, Loop *ParentLoop,
    std::map<Loop*, Loop*>  &ClonedLoopMap);
 
 static void print(Loop *L);
 
 /// \brief Iterates over all basic blocks in the cloned loop and fixes all the jump instructions
-static void fixLoopBranches(Loop *ClonedLoop, BasicBlock *pre, ValueToValueMapTy &VMap);
+static void fix_loop_branches(Loop *ClonedLoop, BasicBlock *pre, ValueToValueMapTy &VMap);
 
 /// \brief Clones the loop for profilling
 ///  - Each instruction
-static void createProfileLoop(BasicBlock *pp, LoopInfo *LI, DominatorTree *DT);
+static void create_profile_loop(BasicBlock *pp, LoopInfo *LI, DominatorTree *DT);
 
 /// \brief Clones a loop \p OrigLoop.  Returns the loop and the blocks in \p
 /// Blocks.
 ///
 /// Updates LoopInfo and DominatorTree assuming the loop is dominated by block
 /// \p LoopDomBB.  Insert the new blocks before block specified in \p Before.
-static Loop *cloneLoopWithPreheader(BasicBlock *Before, BasicBlock *LoopDomBB,
+static Loop *clone_loop_with_preheader(BasicBlock *Before, BasicBlock *LoopDomBB,
                                    Loop *OrigLoop, ValueToValueMapTy &VMap,
                                    const Twine &NameSuffix, LoopInfo *LI,
                                    DominatorTree *DT,
                                    SmallVectorImpl<BasicBlock *> &Blocks);
 
-void manual_profile(Function *F, LoopInfo *LI, DominatorTree *DT, const Geps &g,
-                    NodeSet &s);
+void manual_profile(Function *F, LoopInfo *LI, DominatorTree *DT, PostDominatorTree *PDT,
+                    const Geps &g, NodeSet &s);
 
 }; // namespace phoenix

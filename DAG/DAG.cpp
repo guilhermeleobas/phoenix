@@ -72,6 +72,11 @@ void DAG::update_passes(BasicBlock *from, BasicBlock *to){
   this->DT->deleteEdge(from, old_to);
   this->DT->insertEdge(from, to);
   this->DT->insertEdge(to, old_to);
+
+  // update PostDominatorTree
+  this->PDT->deleteEdge(old_to, from);
+  this->PDT->insertEdge(to, from);
+  this->PDT->insertEdge(old_to, to);
 }
 
 void DAG::split(StoreInst *store) {
@@ -118,12 +123,12 @@ void DAG::run_dag_opt(Function &F) {
 
     NodeSet s = dv.getSet();
 
-    DotVisitor dot(store);
-    dot.print();
+    // DotVisitor dot(store);
+    // dot.print();
 
     switch (DagInstrumentation){
       case OptType::Manual:
-        phoenix::manual_profile(&F, this->LI, this->DT, g, s);
+        phoenix::manual_profile(&F, this->LI, this->DT, this->PDT, g, s);
         break;
       case OptType::Automatic:
         phoenix::auto_profile(&F, g, s);
@@ -142,6 +147,7 @@ bool DAG::runOnFunction(Function &F) {
   Idtf = &getAnalysis<Identify>();
   LI = &getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
   DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
+  PDT = &getAnalysis<PostDominatorTreeWrapperPass>().getPostDomTree();
 
   run_dag_opt(F);
 
@@ -153,6 +159,7 @@ void DAG::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<Identify>();
   AU.addRequired<LoopInfoWrapperPass>();
   AU.addRequired<DominatorTreeWrapperPass>();
+  AU.addRequired<PostDominatorTreeWrapperPass>();
   AU.setPreservesAll();
 }
 
