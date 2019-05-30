@@ -9,15 +9,16 @@ namespace phoenix {
 class DependenceAnalysis {
 private:
   Value *get_predicate(BasicBlock *X, BasicBlock *Y, Value *old_pred);
-  void update_control_dependences(BasicBlock *Y, Value *pred);
+  void create_control_edges(BasicBlock *Y, Value *pred);
+  void compute_control_dependences(DomTreeNodeBase<BasicBlock> *X, Value *pred);
 
-  void compute_dependences(DomTreeNodeBase<BasicBlock> *X, Value *pred);
-  void compute_dependences();
+  void create_data_edges(Value *start);
+  void compute_data_dependences();
 
   void print_graph();
 
 public:
-  std::set<const Value *> get_dependences_transition(const Value *start);
+  std::set<Value *> get_dependences_transition(Value *start);
   DependenceAnalysis(DominatorTree *DT, PostDominatorTree *PDT);
 
 private:

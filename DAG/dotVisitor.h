@@ -27,7 +27,7 @@ using namespace llvm;
 #define DIGRAPH_BEGIN \
   "digraph G { \n"
 #define DIGRAPH_END \
-  "}\n";
+  "}\n"
 
 #define QUOTE(s) \
   "\"" + s + "\""
