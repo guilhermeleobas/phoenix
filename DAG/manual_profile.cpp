@@ -22,7 +22,6 @@
 #include <queue>
 
 #include "manual_profile.h"
-#include "dependency.h"
 #include "utils.h"
 
 using namespace llvm;
@@ -62,6 +61,24 @@ static Loop *get_outer_loop(LoopInfo *LI, BasicBlock *BB) {
   }
 
   llvm_unreachable("unreachable state");
+}
+
+static std::vector<Loop*> find_loop_chain(LoopInfo *LI, Loop *L){
+  std::vector<Loop*> v;
+
+  while (true){
+    unsigned depth = L->getLoopDepth();
+
+    if (depth <= 1){
+      v.push_back(L);
+      break;
+    }
+
+  }
+}
+
+static std::vector<Loop*> find_loop_chain(LoopInfo *LI, BasicBlock *BB){
+  return find_loop_chain(LI, LI->getLoopFor(BB));
 }
 
 static BasicBlock *split_pre_header(Loop *L, LoopInfo *LI, DominatorTree *DT) {
@@ -322,8 +339,6 @@ void manual_profile(Function *F, LoopInfo *LI, DominatorTree *DT, PostDominatorT
   // }
 
   // auto *st = processed_loops[L];
-
-  Dependency D(F, PDT);
 
   // StoreInst *store = cast<StoreInst>(st->VMap[g.get_store_inst()]);
   // for (auto &node : s){
