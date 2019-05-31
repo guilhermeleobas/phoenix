@@ -2,8 +2,10 @@
 
 **Disclaimer: This is still a work in progress!**
 
-![Arnoldao Sangue Bom](https://media.giphy.com/media/9wv8qIAq9njgY/giphy-downsized.gif)
+<!-- ![Arnoldao Sangue Bom](https://media.giphy.com/media/9wv8qIAq9njgY/giphy-downsized.gif) -->
+![PLDI2019](https://i.imgur.com/5grNQoc.png)
 
+*The PLDI 2019 logo*
 
 ## Goal
 
