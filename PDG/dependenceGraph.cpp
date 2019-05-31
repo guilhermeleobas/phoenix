@@ -20,7 +20,7 @@ namespace phoenix {
 #define ENDL "\\n"
 
 #define DIGRAPH_BEGIN \
-  "digraph G { \n"
+  "digraph G { \n" 
 #define DIGRAPH_END \
   "}\n"
 
@@ -145,7 +145,7 @@ std::string DependenceGraph::declare_edges(){
     std::string id_u = ID(edge->u);
     std::string id_v = ID(edge->v);
     if (edge->type == DT_Data){
-      str += EDGE(id_u, id_v, "dotted", "red") + "\n";
+      str += EDGE(id_u, id_v, "dashed", "red") + "\n";
     }
     else {
       str += EDGE(id_u, id_v, "dashed", "blue") + "\n";

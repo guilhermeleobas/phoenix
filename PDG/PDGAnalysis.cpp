@@ -23,7 +23,7 @@
 #include <stack>
 #include <vector>
 
-#include "dependenceAnalysis.h"
+#include "PDGAnalysis.h"
 #include "dependenceGraph.h"
 
 using namespace llvm;
@@ -36,7 +36,7 @@ namespace phoenix {
 ///   1. X ends with a conditional jump
 ///   2. Y does not post-dominates X
 ///
-Value *DependenceAnalysis::get_predicate(BasicBlock *X, BasicBlock *Y, Value *old_pred) {
+Value *PDG::get_predicate(BasicBlock *X, BasicBlock *Y, Value *old_pred) {
   auto *ti = X->getTerminator();
 
   if (!isa<BranchInst>(ti))
@@ -51,7 +51,7 @@ Value *DependenceAnalysis::get_predicate(BasicBlock *X, BasicBlock *Y, Value *ol
 }
 
 // Create control dependence edges from each y \in Y to the predicate *pred
-void DependenceAnalysis::create_control_edges(BasicBlock *Y, Value *pred) {
+void PDG::create_control_edges(BasicBlock *Y, Value *pred) {
   if (pred == nullptr)
     return;
 
@@ -61,7 +61,7 @@ void DependenceAnalysis::create_control_edges(BasicBlock *Y, Value *pred) {
   }
 }
 
-void DependenceAnalysis::compute_control_dependences(DomTreeNodeBase<BasicBlock> *X, Value *pred) {
+void PDG::compute_control_dependences(DomTreeNodeBase<BasicBlock> *X, Value *pred) {
   create_control_edges(X->getBlock(), pred);
 
   for (auto *Y : *X) {
@@ -71,7 +71,7 @@ void DependenceAnalysis::compute_control_dependences(DomTreeNodeBase<BasicBlock>
   return;
 }
 
-std::set<Value *> DependenceAnalysis::get_dependences_transition(Value *start) {
+std::set<Value *> PDG::get_dependences_transition(Value *start) {
   //
   std::set<Value *> s;
   std::queue<Value *> q;
@@ -102,13 +102,13 @@ std::set<Value *> DependenceAnalysis::get_dependences_transition(Value *start) {
   return s;
 }
 
-void DependenceAnalysis::print_graph() {
+void PDG::print_graph() {
   for (auto &u : *DG) {
     get_dependences_transition(u.first);
   }
 }
 
-void DependenceAnalysis::create_data_edges(Value *start) {
+void PDG::create_data_edges(Value *start) {
   if (!isa<Instruction>(start))
     return;
 
@@ -134,18 +134,25 @@ void DependenceAnalysis::create_data_edges(Value *start) {
   }
 }
 
-void DependenceAnalysis::compute_data_dependences() {
-  for (auto &kv : *DG) {
-    Value *start = kv.first;
-    create_data_edges(start);
+void PDG::compute_data_dependences(Function *F) {
+
+  for (BasicBlock &BB : *F){
+    for (Instruction &I : BB){
+      create_data_edges(&I);
+    }
   }
+
+  // for (auto &kv : *DG) {
+  //   Value *start = kv.first;
+  //   create_data_edges(start);
+  // }
 }
 
-DependenceAnalysis::DependenceAnalysis(DominatorTree *DT, PostDominatorTree *PDT)
+PDG::PDG(Function *F, DominatorTree *DT, PostDominatorTree *PDT)
     : DT(DT), PDT(PDT) {
   DG = new DependenceGraph();
   compute_control_dependences(DT->getRootNode(), nullptr);
-  compute_data_dependences();
+  compute_data_dependences(F);
 
   DG->to_dot();
 }

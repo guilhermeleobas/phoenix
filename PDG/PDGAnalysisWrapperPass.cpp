@@ -19,17 +19,17 @@
 #include "llvm/Support/raw_ostream.h"  // For dbgs()
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 
-#include "dependenceAnalysisWrapperPass.h"
+#include "PDGAnalysisWrapperPass.h"
 
 using namespace llvm;
 
 namespace phoenix {
 
-DependenceAnalysis* DependenceAnalysisWrapperPass::getDependenceAnalysis() {
-  return this->DA;
+PDG* PDGAnalysisWrapperPass::getPDG() {
+  return this->DG;
 }
 
-bool DependenceAnalysisWrapperPass::runOnFunction(Function& F) {
+bool PDGAnalysisWrapperPass::runOnFunction(Function& F) {
   if (F.isDeclaration() || F.isIntrinsic() || F.hasAvailableExternallyLinkage())
     return false;
 
@@ -39,20 +39,20 @@ bool DependenceAnalysisWrapperPass::runOnFunction(Function& F) {
   auto* DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
   auto* PDT = &getAnalysis<PostDominatorTreeWrapperPass>().getPostDomTree();
 
-  this->DA = new DependenceAnalysis(DT, PDT);
+  this->DG = new PDG(&F, DT, PDT);
 
   return false;
 }
 
-void DependenceAnalysisWrapperPass::getAnalysisUsage(AnalysisUsage& AU) const {
+void PDGAnalysisWrapperPass::getAnalysisUsage(AnalysisUsage& AU) const {
   AU.addRequired<DominatorTreeWrapperPass>();
   AU.addRequired<PostDominatorTreeWrapperPass>();
   AU.setPreservesAll();
 }
 
-char DependenceAnalysisWrapperPass::ID = 0;
-static RegisterPass<DependenceAnalysisWrapperPass> X(
-    "DependenceAnalysis",
-    "Run dependence analysis on each function");
+char PDGAnalysisWrapperPass::ID = 0;
+static RegisterPass<PDGAnalysisWrapperPass> X(
+    "PDG",
+    "Generate a Program Dependence Graph for each function");
 
 }  // end namespace phoenix

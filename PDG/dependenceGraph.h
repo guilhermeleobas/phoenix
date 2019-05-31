@@ -56,6 +56,14 @@ struct DependenceEdge {
   DependenceEdge(DependenceNode *u, DependenceNode *v, DependenceType dt)
       : u(u), v(v), type(dt) {}
 
+  bool operator<(const DependenceEdge &other) const {
+    return v < other.v;
+  }
+
+  bool operator==(const DependenceEdge &other) const {
+    return v == other.v;
+  }
+
   friend llvm::raw_ostream& operator<<(llvm::raw_ostream& os, DependenceEdge &de){
     os << *de.u << " -> " << *de.v;
     return os;

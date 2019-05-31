@@ -8,22 +8,22 @@ link_directories(${LLVM_LIBRARY_DIRS})
 list(APPEND CMAKE_MODULE_PATH "${LLVM_DIR}")
 include(AddLLVM)
 
-add_llvm_loadable_module(DependenceAnalysis dependenceAnalysisWrapperPass.cpp
-  dependenceAnalysis.cpp dependenceGraph.cpp)
+add_llvm_loadable_module(PDG PDGAnalysisWrapperPass.cpp
+  PDGAnalysis.cpp dependenceGraph.cpp)
 
 # Use C++11 to compile your pass (i.e., supply -std=c++11).
-target_compile_features(DependenceAnalysis PRIVATE cxx_range_for cxx_auto_type)
+target_compile_features(PDG PRIVATE cxx_range_for cxx_auto_type)
 
 # LLVM is (typically) built with no C++ RTTI. We need to match that;
 # otherwise, we'll get linker errors about missing RTTI data.
-set_target_properties(DependenceAnalysis PROPERTIES
+set_target_properties(PDG PROPERTIES
   COMPILE_FLAGS "-fno-rtti"
 )
 
 # Get proper shared-library behavior (where symbols are not necessarily
 # resolved when the shared library is linked) on OS X.
 if(APPLE)
-  set_target_properties(DependenceAnalysis PROPERTIES
+  set_target_properties(PDG PROPERTIES
     LINK_FLAGS "-undefined dynamic_lookup"
   )
 endif(APPLE)
