@@ -397,8 +397,10 @@ bool Identify::runOnFunction(Function &F) {
 }
 
 void Identify::getAnalysisUsage(AnalysisUsage &AU) const {
+  AU.addRequired<LoopInfoWrapperPass>();
   AU.addRequired<DominatorTreeWrapperPass>();
   AU.addRequired<PostDominatorTreeWrapperPass>();
+  AU.setPreservesAll();
 }
 
 char Identify::ID = 0;

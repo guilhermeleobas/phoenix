@@ -126,16 +126,18 @@ void DAG::run_dag_opt(Function &F) {
     // DotVisitor dot(store);
     // dot.print();
 
-    switch (DagInstrumentation){
-      case OptType::Manual:
-        phoenix::manual_profile(&F, this->LI, this->DT, this->PDT, g, s);
-        break;
-      case OptType::Automatic:
-        phoenix::auto_profile(&F, g, s);
-        break;
-      default:
-        phoenix::no_profile(&F, g, s);
-    }
+    PS->slice(g.get_store_inst());
+
+    // switch (DagInstrumentation){
+    //   case OptType::Manual:
+    //     phoenix::manual_profile(&F, this->LI, this->DT, this->PDT, g, s);
+    //     break;
+    //   case OptType::Automatic:
+    //     phoenix::auto_profile(&F, g, s);
+    //     break;
+    //   default:
+    //     phoenix::no_profile(&F, g, s);
+    // }
   }
 }
 
@@ -145,6 +147,7 @@ bool DAG::runOnFunction(Function &F) {
     return false;
 
   Idtf = &getAnalysis<Identify>();
+  PS = getAnalysis<phoenix::ProgramSlicingWrapperPass>().getPS();
   LI = &getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
   DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
   PDT = &getAnalysis<PostDominatorTreeWrapperPass>().getPostDomTree();
@@ -156,11 +159,11 @@ bool DAG::runOnFunction(Function &F) {
 
 //
 void DAG::getAnalysisUsage(AnalysisUsage &AU) const {
-  AU.addRequired<Identify>();
   AU.addRequired<LoopInfoWrapperPass>();
   AU.addRequired<DominatorTreeWrapperPass>();
   AU.addRequired<PostDominatorTreeWrapperPass>();
-  // AU.setPreservesAll();
+  AU.addRequired<Identify>();
+  AU.addRequired<phoenix::ProgramSlicingWrapperPass>();
 }
 
 char DAG::ID = 0;

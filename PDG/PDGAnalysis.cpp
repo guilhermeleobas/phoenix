@@ -36,7 +36,7 @@ namespace phoenix {
 ///   1. X ends with a conditional jump
 ///   2. Y does not post-dominates X
 ///
-Value *PDG::get_predicate(BasicBlock *X, BasicBlock *Y, Value *old_pred) {
+Value *ProgramDependenceGraph::get_predicate(BasicBlock *X, BasicBlock *Y, Value *old_pred) {
   auto *ti = X->getTerminator();
 
   if (!isa<BranchInst>(ti))
@@ -51,7 +51,7 @@ Value *PDG::get_predicate(BasicBlock *X, BasicBlock *Y, Value *old_pred) {
 }
 
 // Create control dependence edges from each y \in Y to the predicate *pred
-void PDG::create_control_edges(BasicBlock *Y, Value *pred) {
+void ProgramDependenceGraph::create_control_edges(BasicBlock *Y, Value *pred) {
   if (pred == nullptr)
     return;
 
@@ -61,7 +61,7 @@ void PDG::create_control_edges(BasicBlock *Y, Value *pred) {
   }
 }
 
-void PDG::compute_control_dependences(DomTreeNodeBase<BasicBlock> *X, Value *pred) {
+void ProgramDependenceGraph::compute_control_dependences(DomTreeNodeBase<BasicBlock> *X, Value *pred) {
   create_control_edges(X->getBlock(), pred);
 
   for (auto *Y : *X) {
@@ -71,44 +71,41 @@ void PDG::compute_control_dependences(DomTreeNodeBase<BasicBlock> *X, Value *pre
   return;
 }
 
-std::set<Value *> PDG::get_dependences_transition(Value *start) {
+std::set<Instruction*> ProgramDependenceGraph::get_all_dependences(Instruction *start) {
+
   //
-  std::set<Value *> s;
-  std::queue<Value *> q;
+  std::set<Instruction *> s;
+  std::queue<Instruction *> q;
 
   s.insert(start);
   q.push(start);
 
-  while (true) {
-    Value *u = q.front();
+  while (!q.empty()) {
+    Instruction *u = q.front();
     q.pop();
 
-    if (DG->find(u) == DG->end())
-      break;
+    if (DG->find(u) == DG->end()){
+      continue;
+    }
 
     for (DependenceEdge *edge : DG->operator[](u)) {
-      if (s.find(edge->v->node) != s.end())
+      if (!isa<Instruction>(edge->v->node))
         continue;
 
-      s.insert(edge->v->node);
-      q.push(edge->v->node);
+      Instruction *v = cast<Instruction>(edge->v->node);
+
+      if (s.find(v) != s.end())
+        continue;
+
+      s.insert(v);
+      q.push(v);
     }
   }
-
-  for (Value *v : s)
-    errs() << *v << "\n";
-  errs() << "\n-----\n\n";
 
   return s;
 }
 
-void PDG::print_graph() {
-  for (auto &u : *DG) {
-    get_dependences_transition(u.first);
-  }
-}
-
-void PDG::create_data_edges(Value *start) {
+void ProgramDependenceGraph::create_data_edges(Value *start) {
   if (!isa<Instruction>(start))
     return;
 
@@ -134,7 +131,7 @@ void PDG::create_data_edges(Value *start) {
   }
 }
 
-void PDG::compute_data_dependences(Function *F) {
+void ProgramDependenceGraph::compute_data_dependences(Function *F) {
 
   for (BasicBlock &BB : *F){
     for (Instruction &I : BB){
@@ -142,19 +139,20 @@ void PDG::compute_data_dependences(Function *F) {
     }
   }
 
-  // for (auto &kv : *DG) {
-  //   Value *start = kv.first;
-  //   create_data_edges(start);
-  // }
 }
 
-PDG::PDG(Function *F, DominatorTree *DT, PostDominatorTree *PDT)
-    : DT(DT), PDT(PDT) {
-  DG = new DependenceGraph();
+DependenceGraph* ProgramDependenceGraph::get_dependence_graph() {
+  return DG;
+}
+
+void ProgramDependenceGraph::compute_dependences(Function *F){
   compute_control_dependences(DT->getRootNode(), nullptr);
   compute_data_dependences(F);
+}
 
-  DG->to_dot();
+ProgramDependenceGraph::ProgramDependenceGraph(Function *F, DominatorTree *DT, PostDominatorTree *PDT)
+    : DT(DT), PDT(PDT) {
+  DG = new DependenceGraph();
 }
 
 }  // namespace phoenix

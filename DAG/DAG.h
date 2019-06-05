@@ -6,6 +6,7 @@ using namespace llvm;
 #include "llvm/ADT/StringRef.h"
 #include "../Identify/Geps.h"
 #include "../Identify/Identify.h"
+#include "../ProgramSlicing/ProgramSlicing.h"
 #include "node.h"
 #include "NodeSet.h"
 #include "parser.h"
@@ -18,6 +19,7 @@ class DAG : public FunctionPass {
   DominatorTree *DT;
   PostDominatorTree *PDT;
   Identify *Idtf;
+  phoenix::ProgramSlicing *PS;
   //
  
  private:

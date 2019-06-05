@@ -1,6 +1,17 @@
 #pragma once
 
 #include "llvm/IR/Instructions.h" // To have access to the Instructions.
+#include "llvm/ADT/Statistic.h"  // For the STATISTIC macro.
+#include "llvm/Analysis/VectorUtils.h"
+#include "llvm/IR/Constants.h"  // For ConstantData, for instance.
+#include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/InstIterator.h"  // To use the iterator instructions(f)
+#include "llvm/IR/Instructions.h"  // To have access to the Instructions.
+#include "llvm/IR/IntrinsicInst.h"
+#include "llvm/IR/Metadata.h"
+#include "llvm/Support/raw_ostream.h"  // For dbgs()
+#include "llvm/Transforms/Utils/BasicBlockUtils.h"
+#include "llvm/IR/DebugInfoMetadata.h" // For DILocation
 
 #include <map>
 #include <set>

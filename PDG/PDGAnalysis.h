@@ -1,12 +1,13 @@
 #pragma once
 
+#include "llvm/Analysis/PostDominators.h"
 #include "dependenceGraph.h"
 
 using namespace llvm;
 
 namespace phoenix {
 
-class PDG {
+class ProgramDependenceGraph {
 private:
   Value *get_predicate(BasicBlock *X, BasicBlock *Y, Value *old_pred);
   void create_control_edges(BasicBlock *Y, Value *pred);
@@ -15,11 +16,12 @@ private:
   void create_data_edges(Value *start);
   void compute_data_dependences(Function *F);
 
-  void print_graph();
-
 public:
-  std::set<Value *> get_dependences_transition(Value *start);
-  PDG(Function *F, DominatorTree *DT, PostDominatorTree *PDT);
+  std::set<Instruction *> get_all_dependences(Instruction *start);
+  void compute_dependences(Function *F);
+
+  DependenceGraph* get_dependence_graph();
+  ProgramDependenceGraph(Function *F, DominatorTree *DT, PostDominatorTree *PDT);
 
 private:
   DominatorTree *DT;

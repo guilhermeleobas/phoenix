@@ -25,21 +25,18 @@ using namespace llvm;
 
 namespace phoenix {
 
-PDG* PDGAnalysisWrapperPass::getPDG() {
-  return this->DG;
+ProgramDependenceGraph* PDGAnalysisWrapperPass::getPDG() {
+  return this->PDG;
 }
 
 bool PDGAnalysisWrapperPass::runOnFunction(Function& F) {
   if (F.isDeclaration() || F.isIntrinsic() || F.hasAvailableExternallyLinkage())
     return false;
 
-  if (F.getName() == "main")
-    return false;
-
   auto* DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
   auto* PDT = &getAnalysis<PostDominatorTreeWrapperPass>().getPostDomTree();
 
-  this->DG = new PDG(&F, DT, PDT);
+  this->PDG = new ProgramDependenceGraph(&F, DT, PDT);
 
   return false;
 }

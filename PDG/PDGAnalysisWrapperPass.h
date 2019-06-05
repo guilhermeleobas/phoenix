@@ -8,7 +8,7 @@ namespace phoenix {
 
 class PDGAnalysisWrapperPass : public FunctionPass {
  private:
-  PDG* DG = nullptr;
+  ProgramDependenceGraph* PDG = nullptr;
 
  public:
   // Pass identifier, for LLVM's RTTI support:
@@ -17,7 +17,7 @@ class PDGAnalysisWrapperPass : public FunctionPass {
   bool runOnFunction(Function&);
   void getAnalysisUsage(AnalysisUsage& AU) const;
 
-  PDG* getPDG();
+  ProgramDependenceGraph* getPDG();
 
   PDGAnalysisWrapperPass() : FunctionPass(ID) {}
   ~PDGAnalysisWrapperPass() {}
