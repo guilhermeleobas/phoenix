@@ -146,6 +146,8 @@ DependenceGraph* ProgramDependenceGraph::get_dependence_graph() {
 }
 
 void ProgramDependenceGraph::compute_dependences(Function *F){
+  DT->recalculate(*F);
+  PDT->recalculate(*F);
   compute_control_dependences(DT->getRootNode(), nullptr);
   compute_data_dependences(F);
 }

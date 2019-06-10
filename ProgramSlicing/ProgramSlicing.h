@@ -10,16 +10,17 @@ class ProgramSlicing {
   LoopInfo *LI;
   DominatorTree *DT;
   PostDominatorTree *PDT;
-  // DeadCodeElimination *DCE;
+  Function *F;
 
+  void set_entry_block(Loop *L);
+  void set_exit_block(Loop *L);
   ///
-  void remove_dead_loops(Loop *parent, Loop *keep);
-  void remove_loops_outside_chain(BasicBlock *BB);
-  void remove_loops_outside_chain(Loop *L, Loop *keep = nullptr);
+  Loop* remove_loops_outside_chain(BasicBlock *BB);
+  Loop* remove_loops_outside_chain(Loop *L, Loop *keep = nullptr);
 
  public:
-  ProgramSlicing(LoopInfo *LI, DominatorTree *DT, PostDominatorTree *PDT, ProgramDependenceGraph *PDG)
-      : LI(LI), DT(DT), PDT(PDT), PDG(PDG) {}
+  ProgramSlicing(Function *F, LoopInfo *LI, DominatorTree *DT, PostDominatorTree *PDT, ProgramDependenceGraph *PDG)
+      : F(F), LI(LI), DT(DT), PDT(PDT), PDG(PDG) {}
 
   /// Slice the program given the start point @V
   void slice(Instruction *I);

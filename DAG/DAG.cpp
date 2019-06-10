@@ -126,7 +126,12 @@ void DAG::run_dag_opt(Function &F) {
     // DotVisitor dot(store);
     // dot.print();
 
-    PS->slice(g.get_store_inst());
+    if (s.size() == 0)
+      continue;
+
+    phoenix::Node *node = *s.begin();
+    PS->slice(node->getInst());
+    break;
 
     // switch (DagInstrumentation){
     //   case OptType::Manual:

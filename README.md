@@ -88,6 +88,15 @@ Each program that uses this LLVM pass must be linked with `/Collect/collect.c` b
 
 In summary, for each instruction marked as interesting by our static analysis, we add a call to a function defined in `Collect/collect.c`.
 
+### `PDG`
+
+This pass implements a program dependence analysis finding all data and control dependences for any given instruction in a function. 
+
+### `ProgramSlicing`
+
+This pass implements a program slicing using the **program dependence graph** pass as a start point.
+
+
 ### `DAG`
 
 This is where I keep all the logic to optimize this pattern. There are currently three approachs implemented to optimize this pattern and they will be describe and they all rely on some auxiliar files:
