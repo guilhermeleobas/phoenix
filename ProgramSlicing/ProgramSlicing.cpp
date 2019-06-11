@@ -121,7 +121,7 @@ void ProgramSlicing::set_exit_block(Loop *L) {
   Builder.CreateRetVoid();
 
   // set the jump to exit block
-  errs() << "terminator: " << *L_exit->getTerminator() << "\n";
+  // errs() << "terminator: " << *L_exit->getTerminator() << "\n";
   if (BranchInst *br = dyn_cast<BranchInst>(L_exit->getTerminator())){
     br->setSuccessor(0, exit);
   }
@@ -135,7 +135,7 @@ Loop *ProgramSlicing::remove_loops_outside_chain(Loop *L, Loop *keep) {
   // for each subloop \in L, connect the subloop pre-header to its exit!
   // but skip the subloop *keep*
 
-  errs() << *L << "\n";
+  // errs() << *L << "\n";
 
   for (Loop *sub : L->getSubLoops()) {
     if (sub == keep) {
@@ -159,10 +159,6 @@ Loop *ProgramSlicing::remove_loops_outside_chain(BasicBlock *BB) {
     return nullptr;
 
   Loop *outer = remove_loops_outside_chain(L, nullptr);
-
-  for (Loop *L : *LI) {
-    errs() << *L << "\n";
-  }
 
   return outer;
 }

@@ -129,20 +129,20 @@ void DAG::run_dag_opt(Function &F) {
     if (s.size() == 0)
       continue;
 
-    phoenix::Node *node = *s.begin();
-    PS->slice(node->getInst());
-    break;
+    // phoenix::Node *node = *s.begin();
+    // PS->slice(node->getInst());
+    // break;
 
-    // switch (DagInstrumentation){
-    //   case OptType::Manual:
-    //     phoenix::manual_profile(&F, this->LI, this->DT, this->PDT, g, s);
-    //     break;
-    //   case OptType::Automatic:
-    //     phoenix::auto_profile(&F, g, s);
-    //     break;
-    //   default:
-    //     phoenix::no_profile(&F, g, s);
-    // }
+    switch (DagInstrumentation){
+      case OptType::Manual:
+        phoenix::manual_profile(&F, this->LI, this->DT, this->PDT, g, s);
+        break;
+      case OptType::Automatic:
+        phoenix::auto_profile(&F, g, s);
+        break;
+      default:
+        phoenix::no_profile(&F, g, s);
+    }
   }
 }
 

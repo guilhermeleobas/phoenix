@@ -242,64 +242,14 @@ static Loop *clone_loop_with_preheader(BasicBlock *Before, BasicBlock *LoopDomBB
   return NewLoop;
 }
 
+// Clone the function
+static Function* clone_function(Function *F){
+  ValueToValueMapTy VMap;
+  Function *clone = CloneFunction(F, VMap);
 
-/// \brief Given a Value *V, find all the matrices and arrays that builds *V and returns
-/// its types
-static std::vector<Type*> get_function_types(Node *node){
-  std::queue<Node*> q;
-  std::vector<Type*> T;
+  F->viewCFG();
 
-  q.push(node);
-
-  while (!q.empty()){
-    Node *N = q.front();
-    q.pop();
-
-    errs() << "Node: " << *N << "\n";
-
-    if (LoadNode *p = dyn_cast<LoadNode>(N)){
-      LoadInst *load = dyn_cast<LoadInst>(p->getInst());
-      T.push_back (load->getPointerOperandType());
-    }
-    else if (BinaryNode *b = dyn_cast<BinaryNode>(N)){
-      q.push(b->left);
-      q.push(b->right);
-    }
-    else if (UnaryNode *u = dyn_cast<UnaryNode>(N)){
-      q.push(u->child);
-    }
-    else {
-      errs() << "!pattern match: " << *node << "\n";
-      continue;
-    }
-  }
-
-  return T;
-}
-
-/// \brief Given a Loop *L and an Instruction *I, this method creates a new function @F
-/// with a copy of *L inside of it to keep track of how many times *I == 0.0
-/// 
-/// Optimizations: Given that one can one keep track of the values of *I during
-/// iterations. One can remove all the variables from @F whose *I does not have a
-/// direct depende
-static Function* create_function(Loop *L, Node *node){
-  // auto types = getFunctionType(node);
-  // Instruction *I = node->getInst();
-
-  // FunctionType *FT = FunctionType::get(Type::getInt32Ty(getGlobalContext()), types, false);
-
-  // Function *F = Function::Create(FT, Function::ExternalLinkage, Name, TheModule);
-}
-
-/// Clones @L and remove every instruction that is not part of the profilling process
-/// An instruction is said to be part of the profilling iff its value is necessary to
-/// compute another inst in the nodeset @s
-///
-/// to-do: move the loop to a function
-static void create_profile_loop(Loop *L, LoopInfo *LI, DominatorTree *DT,
-                                  NodeSet &s){
-
+  return clone;
 }
 
 void manual_profile(Function *F, LoopInfo *LI, DominatorTree *DT, PostDominatorTree *PDT, 
