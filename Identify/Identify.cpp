@@ -342,7 +342,7 @@ Optional<Geps> Identify::good_to_go(Instruction *I) {
 
     // Check 5:
     if (Optional<GetElementPtrInst *> op_gep = check_op(load, dest_gep)) {
-      return Geps(dest_gep, *op_gep, *store, I, num_op + 1);
+      return Geps(dest_gep, *op_gep, *store, load, I, num_op + 1);
     }
 
   }

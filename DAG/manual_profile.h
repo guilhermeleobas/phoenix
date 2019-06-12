@@ -31,12 +31,61 @@ using namespace llvm;
 
 namespace phoenix {
 
+struct LoopOptProperties {
+  BasicBlock *entry; // the pre preHeader
+  Loop *orig;
+  Loop *clone;
+  ValueToValueMapTy VMap;
+};
+
+using LoopOptPropertiesMap = std::map<Loop*, LoopOptProperties*>;
+
+static Loop *get_outer_loop(LoopInfo *LI, BasicBlock *BB);
+
+static BasicBlock *split_pre_header(Loop *L, LoopInfo *LI, DominatorTree *DT);
+
+// Creates a call to the sampling function
+//  - @F : The function
+//  - @pp : The loop pre preheader 
+//  - @L/@C : Original/Cloned loops
+static void fill_control(Function *F, BasicBlock *pp, Loop *L, Loop *C, LoopInfo *LI, DominatorTree *DT);
+
+/// \brief Clones the original loop \p OrigLoop structure
+/// and keeps it ready to add the basic blocks.
+static void create_new_loops(Loop *OrigLoop, LoopInfo *LI, Loop *ParentLoop,
+   std::map<Loop*, Loop*>  &ClonedLoopMap);
+
+/// \brief Iterates over all basic blocks in the cloned loop and fixes all the jump instructions
+static void fix_loop_branches(Loop *ClonedLoop, BasicBlock *pre, ValueToValueMapTy &VMap);
+
+/// \brief Clones the loop for profilling
+///  - Each instruction
+static void create_profile_loop(BasicBlock *pp, LoopInfo *LI, DominatorTree *DT);
+
+/// \brief Clones a loop \p OrigLoop.  Returns the loop and the blocks in \p
+/// Blocks.
+///
+/// Updates LoopInfo and DominatorTree assuming the loop is dominated by block
+/// \p LoopDomBB.  Insert the new blocks before block specified in \p Before.
+static Loop *clone_loop_with_preheader(BasicBlock *Before, BasicBlock *LoopDomBB,
+                                   Loop *OrigLoop, ValueToValueMapTy &VMap,
+                                   const Twine &NameSuffix, LoopInfo *LI,
+                                   DominatorTree *DT,
+                                   SmallVectorImpl<BasicBlock *> &Blocks);
+
 void manual_profile(Function *F,
                     LoopInfo *LI,
                     DominatorTree *DT,
                     PostDominatorTree *PDT,
                     ProgramSlicing *PS,
-                    const Geps &g,
+                    std::vector<ReachableNodes> &reachables);
+
+void manual_profile(Function *F,
+                    LoopInfo *LI,
+                    DominatorTree *DT,
+                    PostDominatorTree *PDT,
+                    ProgramSlicing *PS,
+                    StoreInst *store,
                     NodeSet &s);
 
 };  // namespace phoenix

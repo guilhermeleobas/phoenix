@@ -23,6 +23,7 @@
 #include "llvm/Transforms/Utils/Cloning.h"
 
 #include "utils.h"
+#include "insertIf.h"
 
 namespace phoenix{
 
@@ -313,7 +314,7 @@ void create_phi_nodes(Function *F, BasicBlock *BB, BasicBlock *BBProfile,
 
 
 //
-void auto_profile(Function *F, const Geps &g, NodeSet &s){
+void auto_profile(Function *F, StoreInst *store, NodeSet &s){
   phoenix::Node *node = *s.begin();
   BasicBlock *BB = node->getInst()->getParent();
 
@@ -327,7 +328,7 @@ void auto_profile(Function *F, const Geps &g, NodeSet &s){
 
   create_phi_nodes(F, BB, BBProfile, BBOpt, VMapProfile, VMapOpt);
 
-  create_BBOpt(VMapOpt, g.get_store_inst(), node->getValue(),
+  create_BBOpt(VMapOpt, store, node->getValue(),
                node->getConstant());
 
   Value *V = node->getValue();
@@ -340,6 +341,13 @@ void auto_profile(Function *F, const Geps &g, NodeSet &s){
   Value *switch_control_ptr = create_switch(F, BB, BBProfile, BBOpt);
 
   create_BBControl(F, BBProfile, switch_control_ptr, c1, c2);
+}
+
+void auto_profile(Function *F, std::vector<ReachableNodes> &reachables){
+  for (ReachableNodes &r : reachables){
+    NodeSet nodes = r.get_nodeset();
+    auto_profile(F, r.get_store(), nodes);
+  }
 }
 
 }; // end namespace phoenix

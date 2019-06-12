@@ -13,24 +13,25 @@
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Pass.h"
-#include "llvm/Support/Debug.h"  // To print error messages.
+#include "llvm/Support/CommandLine.h"  // for command line opts
+#include "llvm/Support/Debug.h"        // To print error messages.
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"  // For dbgs()
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Cloning.h"
-#include "llvm/Support/CommandLine.h" // for command line opts
 
 #include <queue>
 #include <tuple>
 
 #include "DAG.h"
-#include "propagateAnalysisVisitor.h"
+#include "ReachableNodes.h"
+#include "auto_profile.h"
 #include "depthVisitor.h"
 #include "dotVisitor.h"
 #include "insertIf.h"
-#include "auto_profile.h"
 #include "manual_profile.h"
+#include "propagateAnalysisVisitor.h"
 
 #define DEBUG_TYPE "DAG"
 
@@ -41,28 +42,27 @@ enum OptType {
 };
 
 cl::opt<OptType> DagInstrumentation(
-        "dag-opt", cl::desc("Type of instrumentation"),
-        cl::init(OptType::None),
-        cl::values(clEnumValN(OptType::None, "none",
-                              "no instrumentation at all"),
-                   clEnumValN(OptType::Automatic, "auto",
-                              "automatic loop profile"),
-                   clEnumValN(OptType::Manual, "manual",
-                              "profile using a handwritten function call")));
+    "dag-opt",
+    cl::desc("Type of instrumentation"),
+    cl::init(OptType::None),
+    cl::values(clEnumValN(OptType::None, "none", "no instrumentation at all"),
+               clEnumValN(OptType::Automatic, "auto", "automatic loop profile"),
+               clEnumValN(OptType::Manual, "manual", "profile using a handwritten function call")));
 
 // This should implement a cost model
 // Right now we only insert the `if` if the depth is >= threshold(1)
 // TO-DO: Use a more sophisticated solution
 bool DAG::worth_insert_if(Geps &g, unsigned loop_threshold = 1) {
-  if (g.get_loop_depth() >= loop_threshold) return true;
+  if (g.get_loop_depth() >= loop_threshold)
+    return true;
 
   DEBUG(dbgs() << "skipping: " << *g.get_instruction() << "\n"
-               << " threshold " << g.get_loop_depth() << " is not greater than "
-               << loop_threshold << "\n\n");
+               << " threshold " << g.get_loop_depth() << " is not greater than " << loop_threshold
+               << "\n\n");
   return false;
 }
 
-void DAG::update_passes(BasicBlock *from, BasicBlock *to){
+void DAG::update_passes(BasicBlock *from, BasicBlock *to) {
   // update LoopInfo
   Loop *L = this->LI->getLoopFor(from);
   L->addBasicBlockToLoop(to, *this->LI);
@@ -88,7 +88,7 @@ void DAG::split(StoreInst *store) {
 }
 
 void DAG::split(BasicBlock *from) {
-  if (isa<PHINode>(from->begin())){
+  if (isa<PHINode>(from->begin())) {
     Instruction *I = from->getFirstNonPHI();
     auto *to = from->splitBasicBlock(I);
 
@@ -100,16 +100,18 @@ void DAG::split(BasicBlock *from) {
 void DAG::run_dag_opt(Function &F) {
   auto geps = this->Idtf->get_instructions_of_interest();
 
+  std::vector<ReachableNodes> reachables;
+
   for (auto &g : geps) {
     Instruction *I = g.get_instruction();
 
     // sanity check for vector instructions
-    if (I->getOperand(0)->getType()->isVectorTy() ||
-        I->getOperand(1)->getType()->isVectorTy()) {
+    if (I->getOperand(0)->getType()->isVectorTy() || I->getOperand(1)->getType()->isVectorTy()) {
       continue;
     }
 
-    if (!worth_insert_if(g)) continue;
+    if (!worth_insert_if(g))
+      continue;
 
     // Split the basic block after each store instruction
     split(g.get_store_inst());
@@ -126,23 +128,19 @@ void DAG::run_dag_opt(Function &F) {
     // DotVisitor dot(store);
     // dot.print();
 
-    if (s.size() == 0)
-      continue;
+    reachables.push_back(
+        ReachableNodes(g.get_store_inst(), g.get_load_inst(), g.get_instruction(), s));
+  }
 
-    // phoenix::Node *node = *s.begin();
-    // PS->slice(node->getInst());
-    // break;
-
-    switch (DagInstrumentation){
-      case OptType::Manual:
-        phoenix::manual_profile(&F, this->LI, this->DT, this->PDT, this->PS, g, s);
-        break;
-      case OptType::Automatic:
-        phoenix::auto_profile(&F, g, s);
-        break;
-      default:
-        phoenix::no_profile(&F, g, s);
-    }
+  switch (DagInstrumentation) {
+    case OptType::Manual:
+      phoenix::manual_profile(&F, this->LI, this->DT, this->PDT, this->PS, reachables);
+      break;
+    case OptType::Automatic:
+      phoenix::auto_profile(&F, reachables);
+      break;
+    default:
+      phoenix::no_profile(&F, reachables);
   }
 }
 

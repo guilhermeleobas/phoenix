@@ -24,6 +24,7 @@
 
 #include "../Identify/Geps.h"
 #include "utils.h"
+#include "ReachableNodes.h"
 #include "NodeSet.h"
 #include "insertIf.h"
 
@@ -163,14 +164,30 @@ void insert_if(StoreInst *store, Value *v, Value *constant) {
   move_from_prev_to_then(BBPrev, BBThen);
 }
 
-
-void no_profile(Function *F, const Geps &g, NodeSet &s){
-  for (auto &node : s){
-    StoreInst *store = g.get_store_inst();
+void no_profile(Function *F, StoreInst *store, NodeSet &s){
+  for (auto *node : s){
     Value *value = node->getValue();
     Value *constant = node->getConstant();
-    insert_if(g.get_store_inst(), value, constant);
+    insert_if(store, value, constant);
   }
 }
+
+void no_profile(Function *F, std::vector<ReachableNodes> &reachables){
+  for (ReachableNodes &r : reachables){
+    NodeSet nodes = r.get_nodeset();
+    no_profile(F, r.get_store(), nodes);
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
 
 }; // end namespace phoenix

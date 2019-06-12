@@ -10,7 +10,7 @@ using namespace llvm;
 //   I: *p = *p `op` v,
 // where `op` can be +, -, *, /, >>, <<, ...
 struct Geps {
-private:
+ private:
   // The GetElementPtrInst instructions below are used by the profiler
   // to check if the addresses are the same at runtime. Just a sanity check
   // to see how accurate our static analysis is!
@@ -30,13 +30,18 @@ private:
 
   // A pointer to the instruction that stores *p (LHS)
   StoreInst *store;
+  LoadInst *load;
 
   unsigned loop_depth;
 
-public:
-  Geps(GetElementPtrInst *dest, GetElementPtrInst *op, StoreInst *si,
-   Instruction *I, unsigned pos)
-  : dest_gep(dest), op_gep(op), store(si), I(I), operand_pos(pos), loop_depth(0) {
+ public:
+  Geps(GetElementPtrInst *dest,
+       GetElementPtrInst *op,
+       StoreInst *si,
+       LoadInst *load,
+       Instruction *I,
+       unsigned pos)
+      : dest_gep(dest), op_gep(op), store(si), load(load), I(I), operand_pos(pos), loop_depth(0) {
     assert(operand_pos == FIRST || operand_pos == SECOND);
 
     p_after = I;
@@ -47,6 +52,7 @@ public:
   GetElementPtrInst *get_dest_gep() const { return dest_gep; }
   GetElementPtrInst *get_op_gep() const { return op_gep; }
   StoreInst *get_store_inst() const { return store; }
+  LoadInst *get_load_inst() const { return load; }
   unsigned get_operand_pos() const { return operand_pos; }
   unsigned get_v_pos() const { return operand_pos == FIRST ? SECOND : FIRST; }
   Value *get_v() const { return v; }
@@ -62,10 +68,8 @@ public:
     const DebugLoc &loc = I->getDebugLoc();
     if (loc) {
       auto *Scope = cast<DIScope>(loc.getScope());
-      dbgs() << "I: " << *I << " [" << Scope->getFilename()
-             << ":" << loc.getLine() << "]"
+      dbgs() << "I: " << *I << " [" << Scope->getFilename() << ":" << loc.getLine() << "]"
              << "\n";
     }
   }
-
 };
