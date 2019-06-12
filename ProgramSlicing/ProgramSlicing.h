@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../PDG/PDGAnalysis.h"
+#include "../ProgramSlicing/ProgramSlicing.h"
 
 namespace phoenix{
 
@@ -10,20 +11,21 @@ class ProgramSlicing {
   LoopInfo *LI;
   DominatorTree *DT;
   PostDominatorTree *PDT;
-  Function *F;
 
-  void set_entry_block(Loop *L);
-  void set_exit_block(Loop *L);
+  void reset_analysis(Function *F);
+
+  void set_entry_block(Function *F, Loop *L);
+  void set_exit_block(Function *F, Loop *L);
   ///
   Loop* remove_loops_outside_chain(BasicBlock *BB);
   Loop* remove_loops_outside_chain(Loop *L, Loop *keep = nullptr);
 
  public:
-  ProgramSlicing(Function *F, LoopInfo *LI, DominatorTree *DT, PostDominatorTree *PDT, ProgramDependenceGraph *PDG)
-      : F(F), LI(LI), DT(DT), PDT(PDT), PDG(PDG) {}
+  ProgramSlicing(LoopInfo *LI, DominatorTree *DT, PostDominatorTree *PDT, ProgramDependenceGraph *PDG)
+      : LI(LI), DT(DT), PDT(PDT), PDG(PDG) {}
 
   /// Slice the program given the start point @V
-  void slice(Instruction *I);
+  void slice(Function *F, Instruction *I);
 };
 
 class ProgramSlicingWrapperPass : public FunctionPass {

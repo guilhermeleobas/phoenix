@@ -135,7 +135,7 @@ void DAG::run_dag_opt(Function &F) {
 
     switch (DagInstrumentation){
       case OptType::Manual:
-        phoenix::manual_profile(&F, this->LI, this->DT, this->PDT, g, s);
+        phoenix::manual_profile(&F, this->LI, this->DT, this->PDT, this->PS, g, s);
         break;
       case OptType::Automatic:
         phoenix::auto_profile(&F, g, s);

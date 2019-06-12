@@ -17,7 +17,7 @@ void remap_nodes(BasicBlock *BB, ValueToValueMapTy &VMap) {
 
       // also update incoming blocks
       if (PHINode *phi = dyn_cast<PHINode>(&I)) {
-        auto *incoming = phi->getIncomingBlock(i);
+        BasicBlock *incoming = phi->getIncomingBlock(i);
         phi->setIncomingBlock(i, cast<BasicBlock>(VMap[incoming]));
       }
     }

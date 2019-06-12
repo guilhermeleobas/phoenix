@@ -89,10 +89,7 @@ bool EliminateUnreachableBlocks(Function &F, bool KeepOneInputPHIs=false) {
   return !DeadBlocks.empty();
 }
 
-void ProgramSlicing::set_entry_block(Loop *L) {
-  // BasicBlock *entry = BasicBlock::Create(F->getContext(), "function_entry", F, preheader);
-  // IRBuilder<> Builder(entry);
-  // Builder.CreateBr(preheader);
+void ProgramSlicing::set_entry_block(Function *F, Loop *L) {
 
   BasicBlock *preheader = L->getLoopPreheader();
   BasicBlock *entry = &F->getEntryBlock();
@@ -102,18 +99,11 @@ void ProgramSlicing::set_entry_block(Loop *L) {
   BasicBlock *pred = preheader->getUniquePredecessor();
   preheader->removePredecessor(pred);
 
-  // BranchInst *pred_br = cast<BranchInst>(pred->getTerminator());
-  // for (unsigned i = 0; i < pred_br->getNumSuccessors(); i++) {
-  //   if (pred_br->getSuccessor(i) == preheader) {
-  //     pred_br->setSuccessor(i, pred);
-  //   }
-  // }
-
   BranchInst *br = cast<BranchInst>(entry->getTerminator());
   br->setSuccessor(0, preheader);
 }
 
-void ProgramSlicing::set_exit_block(Loop *L) {
+void ProgramSlicing::set_exit_block(Function *F, Loop *L) {
   BasicBlock *L_exit = L->getExitBlock();
   BasicBlock *exit = BasicBlock::Create(F->getContext(), "function_exit", F, L_exit);
 
@@ -173,15 +163,22 @@ unsigned get_num_users(Instruction *I) {
   return nUsers;
 }
 
-void ProgramSlicing::slice(Instruction *I) {
+void ProgramSlicing::reset_analysis(Function *F){
+  DT->recalculate(*F);
+  PDT->recalculate(*F);
+  LI->analyze(*DT);
+}
+
+void ProgramSlicing::slice(Function *F, Instruction *I) {
   errs() << "function name: " << F->getName() << "\n";
   errs() << "init: " << *I << "\n";
 
+  reset_analysis(F);
   Loop *L = remove_loops_outside_chain(I->getParent());
-  errs() << "Loop: " << *L << "\n";
+  // errs() << "Loop: " << *L << "\n";
 
-  set_entry_block(L);
-  set_exit_block(L);
+  set_entry_block(F, L);
+  set_exit_block(F, L);
 
   EliminateUnreachableBlocks(*F);
 
@@ -234,7 +231,7 @@ bool ProgramSlicingWrapperPass::runOnFunction(Function &F) {
   auto *PDT = &getAnalysis<PostDominatorTreeWrapperPass>().getPostDomTree();
   auto *PDG = getAnalysis<PDGAnalysisWrapperPass>().getPDG();
 
-  this->PS = new ProgramSlicing(&F, LI, DT, PDT, PDG);
+  this->PS = new ProgramSlicing(LI, DT, PDT, PDG);
 
   // we modify the function => return true
   return true;
