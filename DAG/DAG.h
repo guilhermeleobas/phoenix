@@ -19,7 +19,6 @@ class DAG : public FunctionPass {
   DominatorTree *DT;
   PostDominatorTree *PDT;
   Identify *Idtf;
-  phoenix::ProgramSlicing *PS;
   //
  
  private:

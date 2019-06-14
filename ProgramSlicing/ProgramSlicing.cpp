@@ -1,6 +1,6 @@
 #include "ProgramSlicing.h"
 
-#include "../PDG/PDGAnalysisWrapperPass.h"
+#include "../PDG/PDGAnalysis.h"
 #include "llvm/Analysis/LoopInfo.h"
 
 #include "llvm/CodeGen/UnreachableBlockElim.h"
@@ -96,11 +96,13 @@ void ProgramSlicing::set_entry_block(Function *F, Loop *L) {
   if (entry == preheader)
     return;
 
-  BasicBlock *pred = preheader->getUniquePredecessor();
-  preheader->removePredecessor(pred);
+  connect_basic_blocks(entry, preheader);
 
-  BranchInst *br = cast<BranchInst>(entry->getTerminator());
-  br->setSuccessor(0, preheader);
+  // BasicBlock *pred = preheader->getUniquePredecessor();
+  // preheader->removePredecessor(pred);
+
+  // BranchInst *br = cast<BranchInst>(entry->getTerminator());
+  // br->setSuccessor(0, preheader);
 }
 
 void ProgramSlicing::set_exit_block(Function *F, Loop *L) {
@@ -119,43 +121,76 @@ void ProgramSlicing::set_exit_block(Function *F, Loop *L) {
   branch->eraseFromParent();
 }
 
-Loop *ProgramSlicing::remove_loops_outside_chain(Loop *L, Loop *keep) {
-  if (L == nullptr)
-    return keep;
-
-  // the idea is:
-  // for each subloop \in L, connect the subloop pre-header to its exit!
-  // but skip the subloop *keep*
-
-  errs() << *L << "\n";
-  errs() << "#subloops: " << L->getSubLoops().size() << "\n";
-
-  for (Loop *sub : L->getSubLoops()) {
-    errs() << "Entrou\n";
-    errs() << "L: " << *L << "\n";
-    errs() << "sub: " << *sub << "\n";
-
-    if (sub == keep) {
-      continue;
-    }
-
-    auto *pre = sub->getLoopPreheader();
-    auto *exit = sub->getExitBlock();
-
-    BranchInst *br = cast<BranchInst>(pre->getTerminator());
-    // exit->getUniqueSuccessor()->removePredecessor(exit);
-    br->setSuccessor(0, exit);
-  }
-
-  return remove_loops_outside_chain(L->getParentLoop(), L);
+void ProgramSlicing::connect_basic_blocks(BasicBlock *to, BasicBlock *from){
+  Instruction *term = to->getTerminator();
+  IRBuilder<> Builder(term);
+  Builder.CreateBr(from);
+  term->dropAllReferences();
+  term->eraseFromParent();
 }
 
-Loop *ProgramSlicing::remove_loops_outside_chain(BasicBlock *BB) {
-  Loop *L = LI->getLoopFor(BB);
+Loop *ProgramSlicing::remove_loops_outside_chain(Loop *parent, Loop *child) {
+  if (parent == nullptr)
+    return child;
+
+  for (Loop *sub : parent->getSubLoops()){
+    if (sub == child)
+      continue;
+
+    // connect the subloop preheader to its exit
+    connect_basic_blocks(sub->getLoopPreheader(), sub->getExitBlock());
+  }
+
+  // Connect the child exit block to the parent latch block
+  BasicBlock *exit = child->getExitBlock();
+  BasicBlock *latch = parent->getLoopLatch();
+
+  assert (exit != nullptr && latch != nullptr && "exit or parent is null\n");
+
+  Instruction *term = exit->getTerminator();
+  IRBuilder<> Builder(term);
+
+  Builder.CreateBr(latch);
+  term->dropAllReferences();
+  term->eraseFromParent();
+
+  return remove_loops_outside_chain(parent->getParentLoop(), parent);
+}
+
+void ProgramSlicing::connect_body_to_latch(BasicBlock *body, BasicBlock *latch){
+  connect_basic_blocks(body, latch);
+}
+
+void ProgramSlicing::connect_header_to_body(Loop *L, BasicBlock *body){
+  BasicBlock *header = L->getHeader();
+  BasicBlock *exit = L->getExitBlock();
+
+  Instruction *term = header->getTerminator();
+  assert(isa<BranchInst>(term) && "term is not a branch inst");
+  BranchInst *br = cast<BranchInst>(term);
+
+  assert(br->getNumSuccessors() == 2 && "branch instruction has more/less than 2 successors");
+
+  if (br->getSuccessor(0) != exit){
+    br->setSuccessor(0, body);
+  }
+  else {
+    br->setSuccessor(1, body);
+  }
+}
+
+
+Loop *ProgramSlicing::remove_loops_outside_chain(LoopInfo &LI, BasicBlock *BB) {
+  Loop *L = LI.getLoopFor(BB);
   if (L == nullptr)
     return nullptr;
 
-  Loop *outer = remove_loops_outside_chain(L, nullptr);
+  // connect header to body
+  connect_header_to_body(L, BB);
+  // connect body to latch
+  connect_body_to_latch(BB, L->getLoopLatch());
+
+  Loop *outer = remove_loops_outside_chain(L->getParentLoop(), L);
 
   return outer;
 }
@@ -170,22 +205,23 @@ unsigned get_num_users(Instruction *I) {
   return nUsers;
 }
 
-void ProgramSlicing::reset_analysis(Function *F){
-  DT->recalculate(*F);
-  PDT->recalculate(*F);
-  LI->analyze(*DT);
-}
-
 void ProgramSlicing::slice(Function *F, Instruction *I) {
   errs() << "[INFO]: Applying slicing on: " << F->getName() << "\n";
-  reset_analysis(F);
-  Loop *L = remove_loops_outside_chain(I->getParent());
+
+  DominatorTree DT(*F);
+  PostDominatorTree PDT;
+  PDT.recalculate(*F);
+  LoopInfo LI(DT);
+
+  Loop *L = remove_loops_outside_chain(LI, I->getParent());
   // errs() << "Loop: " << *L << "\n";
 
   set_entry_block(F, L);
   set_exit_block(F, L);
 
   EliminateUnreachableBlocks(*F);
+
+  return;
 
   PassBuilder PB;
   FunctionAnalysisManager FAM;
@@ -197,21 +233,15 @@ void ProgramSlicing::slice(Function *F, Instruction *I) {
   DCEPass d;
   d.run(*F, FAM);
 
-  PDG->compute_dependences(F);
-  std::set<Instruction *> dependences = PDG->get_all_dependences(I);
-
-  for (Instruction *I : dependences) {
-    errs() << "\t[dep]: " << *I << "\n";
-  }
-
-  // F->viewCFG();
+  ProgramDependenceGraph PDG;
+  PDG.compute_dependences(F, &DT, &PDT);
+  std::set<Instruction*> dependences = PDG.get_dependences_for(I);
 
   std::queue<Instruction *> q;
   for (Instruction &I : instructions(F)) {
     if (isa<BranchInst>(&I) || isa<ReturnInst>(&I) || dependences.find(&I) != dependences.end())
       continue;
 
-    errs() << "\t\t[DEL]: " << I << "\n";
     I.dropAllReferences();
     q.push(&I);
     // I.eraseFromParent();
@@ -226,36 +256,4 @@ void ProgramSlicing::slice(Function *F, Instruction *I) {
   // F->viewCFG();
 }
 
-ProgramSlicing *ProgramSlicingWrapperPass::getPS() {
-  return PS;
-}
-
-bool ProgramSlicingWrapperPass::runOnFunction(Function &F) {
-  if (F.isDeclaration() || F.isIntrinsic() || F.hasAvailableExternallyLinkage())
-    return false;
-
-  auto *LI = &getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
-  auto *DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
-  auto *PDT = &getAnalysis<PostDominatorTreeWrapperPass>().getPostDomTree();
-  auto *PDG = getAnalysis<PDGAnalysisWrapperPass>().getPDG();
-
-  this->PS = new ProgramSlicing(LI, DT, PDT, PDG);
-
-  // we modify the function => return true
-  return true;
-}
-
-void ProgramSlicingWrapperPass::getAnalysisUsage(AnalysisUsage &AU) const {
-  AU.addRequired<LoopInfoWrapperPass>();
-  AU.addRequired<DominatorTreeWrapperPass>();
-  AU.addRequired<PostDominatorTreeWrapperPass>();
-  AU.addRequired<PDGAnalysisWrapperPass>();
-  AU.setPreservesAll();
-}
-
-char ProgramSlicingWrapperPass::ID = 0;
-static RegisterPass<ProgramSlicingWrapperPass> X(
-    "PS",
-    "Performs a program slicing on a program for a given entry");
-
-};  // namespace phoenix
+}  // namespace phoenix

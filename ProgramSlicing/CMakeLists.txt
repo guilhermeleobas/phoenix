@@ -9,7 +9,6 @@ list(APPEND CMAKE_MODULE_PATH "${LLVM_DIR}")
 include(AddLLVM)
 
 add_llvm_loadable_module(PS 
-  ../PDG/PDGAnalysisWrapperPass.cpp 
   ../PDG/PDGAnalysis.cpp 
   ../PDG/dependenceGraph.cpp 
   ProgramSlicing.cpp)

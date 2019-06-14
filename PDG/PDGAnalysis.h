@@ -9,24 +9,21 @@ namespace phoenix {
 
 class ProgramDependenceGraph {
 private:
-  Value *get_predicate(BasicBlock *X, BasicBlock *Y, Value *old_pred);
+  Value *get_predicate(PostDominatorTree *DT, BasicBlock *X, BasicBlock *Y, Value *old_pred);
   void create_control_edges(BasicBlock *Y, Value *pred);
-  void compute_control_dependences(DomTreeNodeBase<BasicBlock> *X, Value *pred);
+  void compute_control_dependences(DominatorTree *DT, PostDominatorTree *PDT, DomTreeNodeBase<BasicBlock> *X, Value *pred);
 
   void create_data_edges(Value *start);
   void compute_data_dependences(Function *F);
 
 public:
-  std::set<Instruction *> get_all_dependences(Instruction *start);
-  void compute_dependences(Function *F);
+  std::set<Instruction *> get_dependences_for(Instruction *start);
+  void compute_dependences(Function *F, DominatorTree *DT, PostDominatorTree *PDT);
 
   DependenceGraph* get_dependence_graph();
-  ProgramDependenceGraph(Function *F, DominatorTree *DT, PostDominatorTree *PDT);
+  ProgramDependenceGraph();
 
 private:
-  DominatorTree *DT;
-  PostDominatorTree *PDT;
-
   DependenceGraph *DG;
 };
 

@@ -134,7 +134,7 @@ void DAG::run_dag_opt(Function &F) {
 
   switch (DagInstrumentation) {
     case OptType::Manual:
-      phoenix::manual_profile(&F, this->LI, this->DT, this->PDT, this->PS, reachables);
+      phoenix::manual_profile(&F, this->LI, this->DT, this->PDT, reachables);
       break;
     case OptType::Automatic:
       phoenix::auto_profile(&F, reachables);
@@ -150,7 +150,6 @@ bool DAG::runOnFunction(Function &F) {
     return false;
 
   Idtf = &getAnalysis<Identify>();
-  PS = getAnalysis<phoenix::ProgramSlicingWrapperPass>().getPS();
   LI = &getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
   DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
   PDT = &getAnalysis<PostDominatorTreeWrapperPass>().getPostDomTree();
@@ -166,7 +165,6 @@ void DAG::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<DominatorTreeWrapperPass>();
   AU.addRequired<PostDominatorTreeWrapperPass>();
   AU.addRequired<Identify>();
-  AU.addRequired<phoenix::ProgramSlicingWrapperPass>();
 }
 
 char DAG::ID = 0;

@@ -7,42 +7,21 @@ namespace phoenix{
 
 class ProgramSlicing {
  private:
-  ProgramDependenceGraph *PDG;
-  LoopInfo *LI;
-  DominatorTree *DT;
-  PostDominatorTree *PDT;
-
-  void reset_analysis(Function *F);
 
   void set_entry_block(Function *F, Loop *L);
   void set_exit_block(Function *F, Loop *L);
+  void connect_basic_blocks(BasicBlock *to, BasicBlock *from);
+  void connect_body_to_latch(BasicBlock *body, BasicBlock *latch);
+  void connect_header_to_body(Loop *L, BasicBlock *body);
   ///
-  Loop* remove_loops_outside_chain(BasicBlock *BB);
+  Loop* remove_loops_outside_chain(LoopInfo &LI, BasicBlock *BB);
   Loop* remove_loops_outside_chain(Loop *L, Loop *keep = nullptr);
 
  public:
-  ProgramSlicing(LoopInfo *LI, DominatorTree *DT, PostDominatorTree *PDT, ProgramDependenceGraph *PDG)
-      : LI(LI), DT(DT), PDT(PDT), PDG(PDG) {}
+  ProgramSlicing();
 
   /// Slice the program given the start point @V
   void slice(Function *F, Instruction *I);
-};
-
-class ProgramSlicingWrapperPass : public FunctionPass {
- private:
-  ProgramSlicing *PS;
-
- public:
-  // Pass identifier, for LLVM's RTTI support:
-  static char ID;
-
-  ProgramSlicing* getPS();
-
-  bool runOnFunction(Function&);
-  void getAnalysisUsage(AnalysisUsage& AU) const;
-
-  ProgramSlicingWrapperPass() : FunctionPass(ID) {}
-  ~ProgramSlicingWrapperPass() {}
 };
 
 };  // namespace phoenix

@@ -35,7 +35,6 @@ static void manual_profile(Function *F,
                            LoopInfo *LI,
                            DominatorTree *DT,
                            PostDominatorTree *PDT,
-                           ProgramSlicing *PS,
                            std::vector<ReachableNodes> &stores_in_loop,
                            unsigned num_stores);
 
@@ -43,7 +42,6 @@ void manual_profile(Function *F,
                     LoopInfo *LI,
                     DominatorTree *DT,
                     PostDominatorTree *PDT,
-                    ProgramSlicing *PS,
                     std::vector<ReachableNodes> &reachables);
 
 };  // namespace phoenix

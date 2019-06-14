@@ -12,7 +12,6 @@ add_llvm_loadable_module(DAG
   ../Identify/Identify.cpp 
   ../ProgramSlicing/ProgramSlicing.cpp
   ../PDG/PDGAnalysis.cpp
-  ../PDG/PDGAnalysisWrapperPass.cpp
   ../PDG/dependenceGraph.cpp
   DAG.cpp
   utils.cpp

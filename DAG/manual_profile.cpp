@@ -251,12 +251,13 @@ static Function *clone_function(Function *F, ValueToValueMapTy &VMap, const Twin
   return clone;
 }
 
-static void slice_function(ProgramSlicing *PS, Function *clone, Instruction *target) {
+static void slice_function(Function *clone, Instruction *target) {
+  ProgramSlicing *PS;
   PS->slice(clone, target);
 
   // ensure that the sliced function will not introduce any ***
-  for (Instruction &I : instructions(*clone))
-    assert(!isa<StoreInst>(&I) && !isa<CallInst>(&I));
+  // for (Instruction &I : instructions(*clone))
+  //   assert(!isa<StoreInst>(&I) && !isa<CallInst>(&I));
 }
 
 // slice, add counter, return value
@@ -341,14 +342,11 @@ static void manual_profile(Function *F,
                            LoopInfo *LI,
                            DominatorTree *DT,
                            PostDominatorTree *PDT,
-                           ProgramSlicing *PS,
                            // the set of stores that are in the same loop chain
                            std::vector<ReachableNodes> &stores_in_loop,
                            unsigned num_stores) {
   // Clone the loop;
   ValueToValueMapTy Loop_VMap;
-
-  errs() << "--COMECOU--\n";
 
   Loop *orig_loop = get_outer_loop(LI, stores_in_loop[0].get_store()->getParent());
   BasicBlock *ph = orig_loop->getLoopPreheader();
@@ -377,7 +375,7 @@ static void manual_profile(Function *F,
 
     errs() << "slicing on: " << *value_after << "\n";
 
-    slice_function(PS, fn_sampling, value_after);
+    slice_function(fn_sampling, value_after);
     add_counters(fn_sampling, value_before, value_after);
 
     InstToFnSamplingMap[arith] = fn_sampling;
@@ -394,24 +392,19 @@ static void manual_profile(Function *F,
       insert_if(store, V, constant);
     }
   }
-
-  errs() << "--FINALIZOU--\n";
-
-  // errs() << "Finalizou: " << F->getName() << "\n\n";
-
-  // F->viewCFG();
 }
 
 void manual_profile(Function *F,
                     LoopInfo *LI,
                     DominatorTree *DT,
                     PostDominatorTree *PDT,
-                    ProgramSlicing *PS,
                     std::vector<ReachableNodes> &reachables) {
   std::map<Loop *, std::vector<ReachableNodes>> mapa;
 
   if (reachables.empty())
     return;
+
+  errs() << "----FUNCTION---: " << F->getName() << "\n";
 
   // First we map stores in the same outer loop into a Map
   for (ReachableNodes &r : reachables) {
@@ -424,10 +417,9 @@ void manual_profile(Function *F,
   for (auto kv : mapa) {
     DT->recalculate(*F);
     PDT->recalculate(*F);
-    manual_profile(F, LI, DT, PDT, PS, kv.second, kv.second.size());
+    manual_profile(F, LI, DT, PDT, kv.second, kv.second.size());
   }
 
-  // F->viewCFG();
 }
 
 }  // namespace phoenix
