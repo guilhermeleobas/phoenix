@@ -110,11 +110,13 @@ void ProgramSlicing::set_exit_block(Function *F, Loop *L) {
   IRBuilder<> Builder(exit);
   Builder.CreateRetVoid();
 
-  // set the jump to exit block
-  // errs() << "terminator: " << *L_exit->getTerminator() << "\n";
-  if (BranchInst *br = dyn_cast<BranchInst>(L_exit->getTerminator())){
-    br->setSuccessor(0, exit);
-  }
+  Instruction *branch = L_exit->getTerminator();
+
+  Builder.SetInsertPoint(branch);
+  Builder.CreateBr(exit);
+
+  branch->dropAllReferences();
+  branch->eraseFromParent();
 }
 
 Loop *ProgramSlicing::remove_loops_outside_chain(Loop *L, Loop *keep) {
@@ -125,9 +127,14 @@ Loop *ProgramSlicing::remove_loops_outside_chain(Loop *L, Loop *keep) {
   // for each subloop \in L, connect the subloop pre-header to its exit!
   // but skip the subloop *keep*
 
-  // errs() << *L << "\n";
+  errs() << *L << "\n";
+  errs() << "#subloops: " << L->getSubLoops().size() << "\n";
 
   for (Loop *sub : L->getSubLoops()) {
+    errs() << "Entrou\n";
+    errs() << "L: " << *L << "\n";
+    errs() << "sub: " << *sub << "\n";
+
     if (sub == keep) {
       continue;
     }
@@ -170,9 +177,7 @@ void ProgramSlicing::reset_analysis(Function *F){
 }
 
 void ProgramSlicing::slice(Function *F, Instruction *I) {
-  errs() << "function name: " << F->getName() << "\n";
-  errs() << "init: " << *I << "\n";
-
+  errs() << "[INFO]: Applying slicing on: " << F->getName() << "\n";
   reset_analysis(F);
   Loop *L = remove_loops_outside_chain(I->getParent());
   // errs() << "Loop: " << *L << "\n";
@@ -195,15 +200,18 @@ void ProgramSlicing::slice(Function *F, Instruction *I) {
   PDG->compute_dependences(F);
   std::set<Instruction *> dependences = PDG->get_all_dependences(I);
 
-  // for (Instruction *I : dependences) {
-  //   errs() << "[dep]: " << *I << "\n";
-  // }
+  for (Instruction *I : dependences) {
+    errs() << "\t[dep]: " << *I << "\n";
+  }
+
+  // F->viewCFG();
 
   std::queue<Instruction *> q;
   for (Instruction &I : instructions(F)) {
     if (isa<BranchInst>(&I) || isa<ReturnInst>(&I) || dependences.find(&I) != dependences.end())
       continue;
 
+    errs() << "\t\t[DEL]: " << I << "\n";
     I.dropAllReferences();
     q.push(&I);
     // I.eraseFromParent();

@@ -96,30 +96,39 @@ static BasicBlock *split_pre_header(Loop *L, LoopInfo *LI, DominatorTree *DT) {
   return pp;
 }
 
-// Creates a call to the sampling function
+// Creates a call to each sampling function
+// aggregates all its values and decide wether or not jump to the
+// optimized loop
 //  - @F : The function
 //  - @pp : The loop pre preheader
 //  - @L/@C : Original/Cloned loops
-static void fill_control(Function *F,
-                         BasicBlock *pp,
-                         Loop *L,
-                         Loop *C,
-                         LoopInfo *LI,
-                         DominatorTree *DT) {
-  Module *M = pp->getModule();
-  Function *fn = M->getFunction("__sampling");
-
-  llvm::SmallVector<Value *, 2> args;
-  for (Argument &arg : F->args())
-    args.push_back(&arg);
-
+static void create_controller(Function *F,
+                              std::map<Instruction *, Function *> samplings,
+                              BasicBlock *pp,
+                              Loop *L,
+                              Loop *C) {
   IRBuilder<> Builder(pp->getFirstNonPHI());
-  Value *n_zeros = Builder.CreateCall(fn, args, "n_zeros", nullptr);
 
-  // Create the conditional
-  auto *I32Ty = Type::getInt32Ty(F->getContext());
-  auto *threshold = ConstantInt::get(I32Ty, 500);
-  auto *cmp = Builder.CreateICmpUGT(n_zeros, threshold, "cmp");
+  // aggregate the return of each sampling call
+  std::vector<CallInst *> calls;
+
+  for (auto kv : samplings) {
+    Function *fn_sampling = kv.second;
+
+    llvm::SmallVector<Value *, 2> args;
+    for (Argument &arg : F->args())
+      args.push_back(&arg);
+
+    CallInst *call = Builder.CreateCall(fn_sampling, args, "call", nullptr);
+    calls.push_back(call);
+  }
+
+  Value *cmp = calls[0];
+
+  for (unsigned i = 1; i < calls.size(); i++) {
+    cmp = Builder.CreateOr(cmp, calls[i]);
+  }
+
   auto *br = Builder.CreateCondBr(cmp, C->getLoopPreheader(), L->getLoopPreheader());
   pp->getTerminator()->eraseFromParent();
 }
@@ -235,54 +244,82 @@ static Loop *clone_loop_with_preheader(BasicBlock *Before,
 }
 
 // Clone the function
-static Function *clone_function(Function *F, ValueToValueMapTy &VMap) {
-  Function *clone = phoenix::CloneFunction(F, VMap);
-  clone->setLinkage(Function::AvailableExternallyLinkage);
+static Function *clone_function(Function *F, ValueToValueMapTy &VMap, const Twine &name) {
+  Function *clone = phoenix::CloneFunction(F, VMap, name);
+  clone->setLinkage(Function::PrivateLinkage);
 
   return clone;
 }
 
 static void slice_function(ProgramSlicing *PS, Function *clone, Instruction *target) {
   PS->slice(clone, target);
+
+  // ensure that the sliced function will not introduce any ***
+  for (Instruction &I : instructions(*clone))
+    assert(!isa<StoreInst>(&I) && !isa<CallInst>(&I));
 }
 
 // slice, add counter, return value
-static Instruction *create_counter(Function *C) {
+static Instruction *create_counter(Function *C, const Twine &name) {
   auto *I32Ty = Type::getInt32Ty(C->getContext());
 
   IRBuilder<> Builder(C->getEntryBlock().getFirstNonPHI());
-  Instruction *ptr = Builder.CreateAlloca(I32Ty, nullptr, "ptr");
+  Instruction *ptr = Builder.CreateAlloca(I32Ty, nullptr, name);
   Builder.CreateStore(ConstantInt::get(I32Ty, 0), ptr);
 
   return ptr;
 }
 
-static void increment_counter(Function *C, Instruction *target, Instruction *ptr, Value *constant) {
-  IRBuilder<> Builder(target->getNextNode());
+static void increment_cnt_counter(Function *C, Instruction *value_after, Instruction *ptr) {
+  IRBuilder<> Builder(value_after->getNextNode());
+
+  auto *I32Ty = Type::getInt32Ty(C->getContext());
+  auto *one = ConstantInt::get(I32Ty, 1);
+
+  LoadInst *counter = Builder.CreateLoad(ptr, "cnt");
+  Value *inc = Builder.CreateAdd(counter, one, "cnt_inc");
+  Builder.CreateStore(inc, ptr);
+}
+
+static void increment_eq_counter(Function *C,
+                                 Instruction *value_before,
+                                 Instruction *value_after,
+                                 Instruction *ptr) {
+  IRBuilder<> Builder(value_after->getNextNode());
 
   auto *I32Ty = Type::getInt32Ty(C->getContext());
   auto *zero = ConstantInt::get(I32Ty, 0);
   auto *one = ConstantInt::get(I32Ty, 1);
 
-  LoadInst *counter = Builder.CreateLoad(ptr, "counter");
+  LoadInst *counter = Builder.CreateLoad(ptr, "eq_counter");
 
   Value *cmp;
-  if (target->getType()->isFloatingPointTy())
-    cmp = Builder.CreateFCmpOEQ(target, constant, "cmp");
+  if (value_after->getType()->isFloatingPointTy())
+    cmp = Builder.CreateFCmpOEQ(value_before, value_after, "cmp");
   else
-    cmp = Builder.CreateICmpEQ(target, constant, "cmp");
+    cmp = Builder.CreateICmpEQ(value_before, value_after, "cmp");
 
   Value *select = Builder.CreateSelect(cmp, zero, one);
-  Value *inc = Builder.CreateAdd(counter, select, "inc");
+  Value *inc = Builder.CreateAdd(counter, select, "eq_inc");
   Builder.CreateStore(inc, ptr);
 }
 
-static void change_return(Function *C, Instruction *ptr) {
+static void change_return(Function *C, Instruction *eq_ptr, Instruction *cnt_ptr) {
+  auto *I1Ty = Type::getInt1Ty(C->getContext());
+  auto *zero = ConstantInt::get(I1Ty, 0);
+  auto *one = ConstantInt::get(I1Ty, 1);
+
   for (auto &BB : *C) {
     if (ReturnInst *ri = dyn_cast<ReturnInst>(BB.getTerminator())) {
       IRBuilder<> Builder(ri);
-      Instruction *counter = Builder.CreateLoad(ptr, "counter");
-      Builder.CreateRet(counter);
+
+      Instruction *cnt = Builder.CreateLoad(cnt_ptr, "cnt");
+      Instruction *eq = Builder.CreateLoad(eq_ptr, "eq");
+
+      Value *cmp = Builder.CreateICmpUGE(cnt, eq, "cmp");
+      Value *ret = Builder.CreateSelect(cmp, one, zero);
+
+      Builder.CreateRet(ret);
 
       ri->dropAllReferences();
       ri->eraseFromParent();
@@ -290,10 +327,79 @@ static void change_return(Function *C, Instruction *ptr) {
   }
 }
 
-static void add_counter(Function *C, Instruction *target, Value *constant) {
-  Instruction *ptr = create_counter(C);
-  increment_counter(C, target, ptr, constant);
-  change_return(C, ptr);
+static void add_counters(Function *C, Instruction *value_before, Instruction *value_after) {
+  Instruction *eq_ptr = create_counter(C, "eq");
+  Instruction *cnt_ptr = create_counter(C, "cnt");
+
+  increment_eq_counter(C, value_before, value_after, eq_ptr);
+  increment_cnt_counter(C, value_after, cnt_ptr);
+
+  change_return(C, eq_ptr, cnt_ptr);
+}
+
+static void manual_profile(Function *F,
+                           LoopInfo *LI,
+                           DominatorTree *DT,
+                           PostDominatorTree *PDT,
+                           ProgramSlicing *PS,
+                           // the set of stores that are in the same loop chain
+                           std::vector<ReachableNodes> &stores_in_loop,
+                           unsigned num_stores) {
+  // Clone the loop;
+  ValueToValueMapTy Loop_VMap;
+
+  errs() << "--COMECOU--\n";
+
+  Loop *orig_loop = get_outer_loop(LI, stores_in_loop[0].get_store()->getParent());
+  BasicBlock *ph = orig_loop->getLoopPreheader();
+  BasicBlock *h = orig_loop->getHeader();
+  BasicBlock *pp = split_pre_header(orig_loop, LI, DT);
+
+  SmallVector<BasicBlock *, 32> Blocks;
+  Loop *cloned_loop =
+      phoenix::clone_loop_with_preheader(pp, ph, orig_loop, Loop_VMap, ".c", LI, DT, Blocks);
+
+  // Now, create the sampling functions
+  //
+  // InstToFnSamplingMap maps the arithmetic instruction to a sampling function
+  std::map<Instruction *, Function *> InstToFnSamplingMap;
+
+  for (ReachableNodes &rn : stores_in_loop) {
+    errs() << "store: " << *rn.get_store() << "\n";
+    ValueToValueMapTy Fn_VMap;
+    Function *fn_sampling = clone_function(F, Fn_VMap, "sampling");
+
+    Instruction *arith = rn.get_arith_inst();
+    LoadInst *load = rn.get_load();
+
+    Instruction *value_before = cast<Instruction>(Fn_VMap[load]);
+    Instruction *value_after = cast<Instruction>(Fn_VMap[arith]);
+
+    errs() << "slicing on: " << *value_after << "\n";
+
+    slice_function(PS, fn_sampling, value_after);
+    add_counters(fn_sampling, value_before, value_after);
+
+    InstToFnSamplingMap[arith] = fn_sampling;
+  }
+
+  create_controller(F, InstToFnSamplingMap, pp, orig_loop, cloned_loop);
+
+  // Optimize the cloned loop
+  for (ReachableNodes &rn : stores_in_loop) {
+    StoreInst *store = cast<StoreInst>(Loop_VMap[rn.get_store()]);
+    for (phoenix::Node *node : rn.get_nodeset()) {
+      Value *V = cast<Value>(Loop_VMap[node->getValue()]);
+      Value *constant = node->getConstant();
+      insert_if(store, V, constant);
+    }
+  }
+
+  errs() << "--FINALIZOU--\n";
+
+  // errs() << "Finalizou: " << F->getName() << "\n\n";
+
+  // F->viewCFG();
 }
 
 void manual_profile(Function *F,
@@ -301,76 +407,27 @@ void manual_profile(Function *F,
                     DominatorTree *DT,
                     PostDominatorTree *PDT,
                     ProgramSlicing *PS,
-                    // the set of nodes that are in the same loop
-                    std::vector<ReachableNodes> loop_reachables){
-  // for (auto &target_node : s) {
-  //   ValueToValueMapTy VMap;
+                    std::vector<ReachableNodes> &reachables) {
+  std::map<Loop *, std::vector<ReachableNodes>> mapa;
 
-  //   Function *clone = clone_function(F, VMap);
-  //   Instruction *target = cast<Instruction>(VMap[target_node->getInst()]);
-  //   slice_function(PS, clone, target);
-  //   add_counter(clone, target, target_node->getConstant());
-  //   clone->viewCFG();
-  // }
+  if (reachables.empty())
+    return;
 
-  // Store the loops already processed
-  //  - Key is a pointer to the (original) most outer loop.
-  //  - Value is a structure that saves the necessary info to perform the
-  //    optimization later on
-  // static LoopOptPropertiesMap processed_loops;
-
-  // auto &target_node = *s.begin();
-  // Loop *L = get_outer_loop(LI, target_node->getInst()->getParent());
-
-  // if (processed_loops.find(L) == processed_loops.end()) {
-  //   // needs to clone the loop
-  //   auto *st = new LoopOptProperties();
-
-  //   // pp -> ph -> h
-  //   auto *ph = L->getLoopPreheader();
-  //   auto *h = L->getHeader();
-  //   auto *pp = split_pre_header(L, LI, DT);
-  //   SmallVector<BasicBlock *, 32> Blocks;
-  //   Loop *C = phoenix::clone_loop_with_preheader(pp, ph, L, st->VMap, ".c", LI, DT, Blocks);
-  //   fill_control(F, pp, L, C, LI, DT);
-
-  //   st->entry = pp;
-  //   st->orig = L;
-  //   st->clone = C;
-
-  //   processed_loops[L] = st;
-  // }
-
-  // auto *st = processed_loops[L];
-
-  // StoreInst *store = cast<StoreInst>(st->VMap[g.get_store_inst()]);
-  // for (auto &node : s) {
-  //   Value *V = node->getValue();
-  //   Value *cnt = node->getConstant();
-  //   insert_if(store, st->VMap[V], cnt);
-  // }
-}
-
-
-void manual_profile(Function *F,
-                    LoopInfo *LI,
-                    DominatorTree *DT,
-                    PostDominatorTree *PDT,
-                    ProgramSlicing *PS,
-                    std::vector<ReachableNodes> &reachables){
-
-  std::map<Loop*, std::vector<ReachableNodes>> mapa;
-  for (ReachableNodes &r : reachables){
+  // First we map stores in the same outer loop into a Map
+  for (ReachableNodes &r : reachables) {
     BasicBlock *BB = r.get_store()->getParent();
-    Loop *L = LI->getLoopFor(BB);
+    Loop *L = get_outer_loop(LI, BB);
     mapa[L].push_back(r);
-    // NodeSet nodes = r.get_nodeset();
-    // manual_profile(F, LI, DT, PDT, PS, r.get_store(), nodes);
   }
 
-  for (auto kv : mapa){
-    errs() << "#stores in the same loop: " << kv.second.size() << "\n";
+  // Then, we create a copy of the outer loop alongside each sampling function
+  for (auto kv : mapa) {
+    DT->recalculate(*F);
+    PDT->recalculate(*F);
+    manual_profile(F, LI, DT, PDT, PS, kv.second, kv.second.size());
   }
+
+  // F->viewCFG();
 }
 
 }  // namespace phoenix

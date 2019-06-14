@@ -146,7 +146,7 @@ void DAG::run_dag_opt(Function &F) {
 
 //
 bool DAG::runOnFunction(Function &F) {
-  if (F.isDeclaration() || F.isIntrinsic() || F.hasAvailableExternallyLinkage())
+  if (F.isDeclaration() || F.isIntrinsic() || F.hasPrivateLinkage() || F.hasAvailableExternallyLinkage())
     return false;
 
   Idtf = &getAnalysis<Identify>();

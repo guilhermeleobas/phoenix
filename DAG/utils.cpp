@@ -35,7 +35,7 @@ BasicBlock *deep_clone(const BasicBlock *BB,
   return clone;
 }
 
-Function *CloneFunction(Function *F, ValueToValueMapTy &VMap, ClonedCodeInfo *CodeInfo) {
+Function *CloneFunction(Function *F, ValueToValueMapTy &VMap, const Twine &name) {
   std::vector<Type *> ArgTypes;
 
   // The user might be deleting arguments to the function by specifying them in
@@ -46,11 +46,11 @@ Function *CloneFunction(Function *F, ValueToValueMapTy &VMap, ClonedCodeInfo *Co
       ArgTypes.push_back(I.getType());
 
   // Create a new function type...
-  auto *I32Ty = Type::getInt32Ty(F->getContext());
-  FunctionType *FTy = FunctionType::get(I32Ty, ArgTypes, F->getFunctionType()->isVarArg());
+  auto *I1Ty = Type::getInt1Ty(F->getContext());
+  FunctionType *FTy = FunctionType::get(I1Ty, ArgTypes, F->getFunctionType()->isVarArg());
 
   // Create the new function...
-  Function *NewF = Function::Create(FTy, F->getLinkage(), F->getName(), F->getParent());
+  Function *NewF = Function::Create(FTy, F->getLinkage(), name, F->getParent());
 
   // Loop over the arguments, copying the names of the mapped arguments over...
   Function::arg_iterator DestI = NewF->arg_begin();
@@ -61,7 +61,7 @@ Function *CloneFunction(Function *F, ValueToValueMapTy &VMap, ClonedCodeInfo *Co
     }
 
   SmallVector<ReturnInst *, 8> Returns;  // Ignore returns cloned.
-  CloneFunctionInto(NewF, F, VMap, F->getSubprogram() != nullptr, Returns, "", CodeInfo);
+  CloneFunctionInto(NewF, F, VMap, F->getSubprogram() != nullptr, Returns, ".s", nullptr);
 
   return NewF;
 }
