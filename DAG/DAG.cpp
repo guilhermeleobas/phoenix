@@ -76,12 +76,10 @@ void DAG::update_passes(BasicBlock *from, BasicBlock *to) {
     this->DT->insertEdge(from, to);
     this->DT->insertEdge(to, old_to);
     
-    if (term->getNumSuccessors() == 1){
-      // update PostDominator Tree
-      this->PDT->deleteEdge(old_to, from);
-      this->PDT->insertEdge(to, from);
-      this->PDT->insertEdge(old_to, to);
-    }
+    // update PostDominator Tree
+    this->PDT->deleteEdge(old_to, from);
+    this->PDT->insertEdge(to, from);
+    this->PDT->insertEdge(old_to, to);
   }
 }
 
