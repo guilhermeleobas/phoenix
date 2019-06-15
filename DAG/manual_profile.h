@@ -41,7 +41,6 @@ static void manual_profile(Function *F,
 void manual_profile(Function *F,
                     LoopInfo *LI,
                     DominatorTree *DT,
-                    PostDominatorTree *PDT,
                     std::vector<ReachableNodes> &reachables);
 
 };  // namespace phoenix

@@ -343,7 +343,6 @@ static void add_counters(Function *C, Instruction *value_before, Instruction *va
 static void manual_profile(Function *F,
                            LoopInfo *LI,
                            DominatorTree *DT,
-                           PostDominatorTree *PDT,
                            // the set of stores that are in the same loop chain
                            std::vector<ReachableNodes> &stores_in_loop,
                            unsigned num_stores) {
@@ -399,13 +398,12 @@ static void manual_profile(Function *F,
 void manual_profile(Function *F,
                     LoopInfo *LI,
                     DominatorTree *DT,
-                    PostDominatorTree *PDT,
                     std::vector<ReachableNodes> &reachables) {
   std::map<Loop *, std::vector<ReachableNodes>> mapa;
 
   if (reachables.empty())
     return;
-
+  
   // First we map stores in the same outer loop into a Map
   for (ReachableNodes &r : reachables) {
     BasicBlock *BB = r.get_store()->getParent();
@@ -416,8 +414,7 @@ void manual_profile(Function *F,
   // Then, we create a copy of the outer loop alongside each sampling function
   for (auto kv : mapa) {
     DT->recalculate(*F);
-    PDT->recalculate(*F);
-    manual_profile(F, LI, DT, PDT, kv.second, kv.second.size());
+    manual_profile(F, LI, DT, kv.second, kv.second.size());
   }
 
   // F->viewCFG();

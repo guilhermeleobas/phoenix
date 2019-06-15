@@ -71,15 +71,12 @@ void DAG::update_passes(BasicBlock *from, BasicBlock *to) {
   for (unsigned i = 0; i < term->getNumSuccessors(); ++i){
     BasicBlock *old_to = term->getSuccessor(i);
     
+    assert(old_to != nullptr && "old_to is nullptr");
+    
     // update Dominator Tree
     this->DT->deleteEdge(from, old_to);
     this->DT->insertEdge(from, to);
     this->DT->insertEdge(to, old_to);
-    
-    // update PostDominator Tree
-    this->PDT->deleteEdge(old_to, from);
-    this->PDT->insertEdge(to, from);
-    this->PDT->insertEdge(old_to, to);
   }
 }
 
@@ -139,7 +136,7 @@ void DAG::run_dag_opt(Function &F) {
 
   switch (DagInstrumentation) {
     case OptType::Manual:
-      phoenix::manual_profile(&F, this->LI, this->DT, this->PDT, reachables);
+      phoenix::manual_profile(&F, this->LI, this->DT, reachables);
       break;
     case OptType::Automatic:
       phoenix::auto_profile(&F, reachables);
@@ -157,8 +154,6 @@ bool DAG::runOnFunction(Function &F) {
   Idtf = &getAnalysis<Identify>();
   LI = &getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
   DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
-  PDT = &getAnalysis<PostDominatorTreeWrapperPass>().getPostDomTree();
-
   run_dag_opt(F);
 
   return true;

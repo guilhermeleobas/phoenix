@@ -17,7 +17,6 @@ class DAG : public FunctionPass {
   //
   LoopInfo *LI;
   DominatorTree *DT;
-  PostDominatorTree *PDT;
   Identify *Idtf;
   //
  
