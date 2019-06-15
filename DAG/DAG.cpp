@@ -66,31 +66,38 @@ void DAG::update_passes(BasicBlock *from, BasicBlock *to) {
   // update LoopInfo
   Loop *L = this->LI->getLoopFor(from);
   L->addBasicBlockToLoop(to, *this->LI);
-
-  // update DominatorTree
-  BasicBlock *old_to = to->getSingleSuccessor();
-  this->DT->deleteEdge(from, old_to);
-  this->DT->insertEdge(from, to);
-  this->DT->insertEdge(to, old_to);
-
-  // update PostDominatorTree
-  this->PDT->deleteEdge(old_to, from);
-  this->PDT->insertEdge(to, from);
-  this->PDT->insertEdge(old_to, to);
+  
+  BranchInst *term = cast<BranchInst>(to->getTerminator());
+  for (unsigned i = 0; i < term->getNumSuccessors(); ++i){
+    BasicBlock *old_to = term->getSuccessor(i);
+    
+    // update Dominator Tree
+    this->DT->deleteEdge(from, old_to);
+    this->DT->insertEdge(from, to);
+    this->DT->insertEdge(to, old_to);
+    
+    if (term->getNumSuccessors() == 1){
+      // update PostDominator Tree
+      this->PDT->deleteEdge(old_to, from);
+      this->PDT->insertEdge(to, from);
+      this->PDT->insertEdge(old_to, to);
+    }
+  }
 }
 
 void DAG::split(StoreInst *store) {
   BasicBlock *from = store->getParent();
-  auto *to = from->splitBasicBlock(store->getNextNode());
+  BasicBlock *to = from->splitBasicBlock(store->getNextNode());
   to->setName("split");
-
+  
   update_passes(from, to);
 }
 
 void DAG::split(BasicBlock *from) {
   if (isa<PHINode>(from->begin())) {
     Instruction *I = from->getFirstNonPHI();
-    auto *to = from->splitBasicBlock(I);
+    BasicBlock *to = from->splitBasicBlock(I);
+    to->setName("split");
 
     update_passes(from, to);
   }
