@@ -221,8 +221,6 @@ void ProgramSlicing::slice(Function *F, Instruction *I) {
 
   EliminateUnreachableBlocks(*F);
 
-  return;
-
   PassBuilder PB;
   FunctionAnalysisManager FAM;
   PB.registerFunctionAnalyses(FAM);
@@ -234,7 +232,7 @@ void ProgramSlicing::slice(Function *F, Instruction *I) {
   d.run(*F, FAM);
 
   ProgramDependenceGraph PDG;
-  PDG.compute_dependences(F, &DT, &PDT);
+  PDG.compute_dependences(F);
   std::set<Instruction*> dependences = PDG.get_dependences_for(I);
 
   std::queue<Instruction *> q;

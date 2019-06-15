@@ -18,7 +18,7 @@ private:
 
 public:
   std::set<Instruction *> get_dependences_for(Instruction *start);
-  void compute_dependences(Function *F, DominatorTree *DT, PostDominatorTree *PDT);
+  void compute_dependences(Function *F);
 
   DependenceGraph* get_dependence_graph();
   ProgramDependenceGraph();

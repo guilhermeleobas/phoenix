@@ -256,8 +256,10 @@ static void slice_function(Function *clone, Instruction *target) {
   PS->slice(clone, target);
 
   // ensure that the sliced function will not introduce any ***
-  // for (Instruction &I : instructions(*clone))
-  //   assert(!isa<StoreInst>(&I) && !isa<CallInst>(&I));
+  for (Instruction &I : instructions(*clone)){
+    assert(!isa<StoreInst>(I) && "sampling function has a store instruction");
+    assert(!isa<CallInst>(I) && "sampling function has a call instruction");
+  }
 }
 
 // slice, add counter, return value
@@ -404,8 +406,6 @@ void manual_profile(Function *F,
   if (reachables.empty())
     return;
 
-  errs() << "----FUNCTION---: " << F->getName() << "\n";
-
   // First we map stores in the same outer loop into a Map
   for (ReachableNodes &r : reachables) {
     BasicBlock *BB = r.get_store()->getParent();
@@ -419,6 +419,8 @@ void manual_profile(Function *F,
     PDT->recalculate(*F);
     manual_profile(F, LI, DT, PDT, kv.second, kv.second.size());
   }
+
+  // F->viewCFG();
 
 }
 

@@ -147,13 +147,16 @@ DependenceGraph *ProgramDependenceGraph::get_dependence_graph() {
   return DG;
 }
 
-void ProgramDependenceGraph::compute_dependences(Function *F,
-                                                 DominatorTree *DT,
-                                                 PostDominatorTree *PDT) {
-  compute_control_dependences(DT, PDT, DT->getRootNode(), nullptr);
+void ProgramDependenceGraph::compute_dependences(Function *F){
+  DominatorTree DT(*F);
+  PostDominatorTree PDT;
+  PDT.recalculate(*F);
+  compute_control_dependences(&DT, &PDT, DT.getRootNode(), nullptr);
   compute_data_dependences(F);
 }
 
-ProgramDependenceGraph::ProgramDependenceGraph() {}
+ProgramDependenceGraph::ProgramDependenceGraph() {
+  this->DG = new DependenceGraph();
+}
 
 }  // namespace phoenix
