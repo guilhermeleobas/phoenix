@@ -97,6 +97,18 @@ static BasicBlock *split_pre_header(Loop *L, LoopInfo *LI, DominatorTree *DT) {
   return pp;
 }
 
+static void dump_ret_value(Module *M, IRBuilder<> &Builder, Value *v){
+  // Let's create the function call
+  Function *f = M->getFunction("dump");
+  std::vector<Value*> params;
+
+  // Create the call
+  auto *I32Ty = Type::getInt32Ty(M->getContext());
+  Value *V = Builder.CreateSExt(v, I32Ty);
+  params.push_back(V);
+  Builder.CreateCall(f, params);
+}
+
 // Creates a call to each sampling function
 // aggregates all its values and decide wether or not jump to the
 // optimized loop
@@ -125,9 +137,11 @@ static void create_controller(Function *F,
   }
 
   Value *cmp = calls[0];
+  // dump_ret_value(F->getParent(), Builder, cmp);
 
   for (unsigned i = 1; i < calls.size(); i++) {
     cmp = Builder.CreateOr(cmp, calls[i]);
+    // dump_ret_value(F->getParent(), Builder, cmp);
   }
 
   auto *br = Builder.CreateCondBr(cmp, C->getLoopPreheader(), L->getLoopPreheader());
@@ -325,10 +339,16 @@ static void change_return(Function *C, Instruction *eq_ptr, Instruction *cnt_ptr
       Instruction *cnt = Builder.CreateLoad(cnt_ptr, "cnt");
       Instruction *eq = Builder.CreateLoad(eq_ptr, "eq");
 
-      // now we need to compare if the eq is greater than a threshold
+      // now we need to compare if the eq is SMALLER than a threshold
+      // if eq ~= cnt, then the store was silent most of the times
+      // therefore we return 1
       Value *sub = Builder.CreateSub(cnt, eq, "sub");
 
-      Value *cmp = Builder.CreateICmpSGE(sub, treshold, "cmp");
+      // dump_ret_value(C->getParent(), Builder, cnt);
+      // dump_ret_value(C->getParent(), Builder, eq);
+      // dump_ret_value(C->getParent(), Builder, sub);
+
+      Value *cmp = Builder.CreateICmpSLE(sub, treshold, "cmp");
       Value *ret = Builder.CreateSelect(cmp, one, zero);
 
       Builder.CreateRet(ret);
@@ -388,11 +408,9 @@ static void add_counters(Function *C, Instruction *value_before, Instruction *va
   increment_eq_counter(C, value_before, value_after, eq_ptr);
   increment_cnt_counter(C, value_after, cnt_ptr);
 
-// #define GAP 501
-#define GAP 501
+#define N_ITER 10000
+#define GAP ((N_ITER / 2) + 1)
   change_return(C, eq_ptr, cnt_ptr, get_constantint(C, GAP));
-
-#define N_ITER 1000
   limit_num_iter(C, value_after, cnt_ptr, get_constantint(C, N_ITER));
 }
 
