@@ -408,8 +408,8 @@ static void add_counters(Function *C, Instruction *value_before, Instruction *va
   increment_eq_counter(C, value_before, value_after, eq_ptr);
   increment_cnt_counter(C, value_after, cnt_ptr);
 
-#define N_ITER 10000
-#define GAP ((N_ITER / 2) + 1)
+#define N_ITER 1000
+#define GAP ((N_ITER / 2) - 1)
   change_return(C, eq_ptr, cnt_ptr, get_constantint(C, GAP));
   limit_num_iter(C, value_after, cnt_ptr, get_constantint(C, N_ITER));
 }
