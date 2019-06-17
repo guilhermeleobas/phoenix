@@ -255,8 +255,8 @@ static void slice_function(Function *clone, Instruction *target) {
   ProgramSlicing *PS;
   PS->slice(clone, target);
 
-  // ensure that the sliced function will not introduce any ***
-  for (Instruction &I : instructions(*clone)){
+  // ensure that the sliced function will not introduce any side effect
+  for (Instruction &I : instructions(*clone)) {
     assert(!isa<StoreInst>(I) && "sampling function has a store instruction");
     // To-do: whitelist of functions without side effect (i.e. sqrt)
     /* assert(!isa<CallInst>(I) && "sampling function has a call instruction"); */
@@ -331,6 +331,48 @@ static void change_return(Function *C, Instruction *eq_ptr, Instruction *cnt_ptr
   }
 }
 
+static BranchInst *get_branch_inst(BasicBlock *BB) {
+  Instruction *term = BB->getTerminator();
+  assert(isa<BranchInst>(term) && "term is not a branch inst");
+  BranchInst *br = cast<BranchInst>(term);
+  return br;
+}
+
+static Value *get_num_iter(Function *F, int num_iter) {
+  auto *I32Ty = Type::getInt32Ty(F->getContext());
+  return ConstantInt::get(I32Ty, num_iter);
+}
+
+static void limit_num_iter(Function *fn,
+                           Instruction *entry_point,
+                           Instruction *cnt_ptr,
+                           Value *num_iter) {
+  DominatorTree DT(*fn);
+  LoopInfo LI(DT);
+
+  Loop *L = LI.getLoopFor(entry_point->getParent());
+  while (L != nullptr) {
+    BasicBlock *header = L->getHeader();
+
+    // get the branch condition
+    BranchInst *br = get_branch_inst(header);
+    Value *pred = br->getCondition();
+
+    // Loads the counter
+    // compare it against num_iter
+    IRBuilder<> Builder(br);
+    LoadInst *cnt = Builder.CreateLoad(cnt_ptr);
+    Value *cond = Builder.CreateICmpULT(cnt, num_iter);
+
+    // replace the branch condition
+    Value *new_cond = Builder.CreateAnd(pred, cond);
+    br->setCondition(new_cond);
+
+    L = L->getParentLoop();
+  }
+
+}
+
 static void add_counters(Function *C, Instruction *value_before, Instruction *value_after) {
   Instruction *eq_ptr = create_counter(C, "eq");
   Instruction *cnt_ptr = create_counter(C, "cnt");
@@ -339,6 +381,9 @@ static void add_counters(Function *C, Instruction *value_before, Instruction *va
   increment_cnt_counter(C, value_after, cnt_ptr);
 
   change_return(C, eq_ptr, cnt_ptr);
+
+#define NUM_ITER 500
+  limit_num_iter(C, value_after, cnt_ptr, get_num_iter(C, NUM_ITER));
 }
 
 static void manual_profile(Function *F,
@@ -404,7 +449,7 @@ void manual_profile(Function *F,
 
   if (reachables.empty())
     return;
-  
+
   // First we map stores in the same outer loop into a Map
   for (ReachableNodes &r : reachables) {
     BasicBlock *BB = r.get_store()->getParent();
@@ -419,7 +464,6 @@ void manual_profile(Function *F,
   }
 
   // F->viewCFG();
-
 }
 
 }  // namespace phoenix
