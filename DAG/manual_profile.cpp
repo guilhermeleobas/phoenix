@@ -343,33 +343,35 @@ static Value *get_num_iter(Function *F, int num_iter) {
   return ConstantInt::get(I32Ty, num_iter);
 }
 
+static BasicBlock *find_exit_block(Function *F){
+  for(Instruction &I : instructions(F))
+    if (isa<ReturnInst>(&I))
+      return I.getParent();
+
+  llvm_unreachable("could not find exit block!");
+}
+
 static void limit_num_iter(Function *fn,
                            Instruction *entry_point,
                            Instruction *cnt_ptr,
                            Value *num_iter) {
-  DominatorTree DT(*fn);
-  LoopInfo LI(DT);
 
-  Loop *L = LI.getLoopFor(entry_point->getParent());
-  while (L != nullptr) {
-    BasicBlock *header = L->getHeader();
+  BasicBlock *exit = find_exit_block(fn); 
+  BasicBlock *body = entry_point->getParent();
+  BasicBlock *prox = body->getUniqueSuccessor();
 
-    // get the branch condition
-    BranchInst *br = get_branch_inst(header);
-    Value *pred = br->getCondition();
+  BasicBlock *split = SplitBlock(body, body->getTerminator());
 
-    // Loads the counter
-    // compare it against num_iter
-    IRBuilder<> Builder(br);
-    LoadInst *cnt = Builder.CreateLoad(cnt_ptr);
-    Value *cond = Builder.CreateICmpULT(cnt, num_iter);
+  Instruction *term = split->getTerminator();
+  term->dropAllReferences();
+  term->eraseFromParent();
 
-    // replace the branch condition
-    Value *new_cond = Builder.CreateAnd(pred, cond);
-    br->setCondition(new_cond);
-
-    L = L->getParentLoop();
-  }
+  // Loads the counter
+  // compare it against num_iter
+  IRBuilder<> Builder(split);
+  LoadInst *cnt = Builder.CreateLoad(cnt_ptr);
+  Value *cond = Builder.CreateICmpSLT(cnt, num_iter);
+  Builder.CreateCondBr(cond, prox, exit);
 
 }
 
