@@ -140,13 +140,17 @@ static void create_controller(Function *F,
   // dump_ret_value(F->getParent(), Builder, cmp);
 
   for (unsigned i = 1; i < calls.size(); i++) {
-    cmp = Builder.CreateOr(cmp, calls[i]);
+    // cmp = Builder.CreateOr(cmp, calls[i]);
+    cmp = Builder.CreateAnd(cmp, calls[i]);
     // dump_ret_value(F->getParent(), Builder, cmp);
   }
 
   auto *br = Builder.CreateCondBr(cmp, C->getLoopPreheader(), L->getLoopPreheader());
   // add_dump_msg(C->getLoopPreheader(), "going to clone\n");
+  // add_dump_msg(C->getLoopPreheader(), F->getName());
   // add_dump_msg(L->getLoopPreheader(), "going to original loop\n");
+  // add_dump_msg(L->getLoopPreheader(), F->getName());
+  // add_dump_msg(L->getLoopPreheader(), " -- function original loop\n");
   pp->getTerminator()->eraseFromParent();
 }
 
@@ -316,11 +320,16 @@ static void increment_eq_counter(Function *C,
 
   Value *cmp;
   if (value_after->getType()->isFloatingPointTy())
-    cmp = Builder.CreateFCmpOEQ(value_before, value_after, "cmp");
+    cmp = Builder.CreateFCmpUEQ(value_before, value_after, "fcmp");
   else
     cmp = Builder.CreateICmpEQ(value_before, value_after, "cmp");
 
-  Value *select = Builder.CreateSelect(cmp, zero, one);
+  // add_dump_msg(value_before, "value_before: %f\n", value_after);
+  // add_dump_msg(value_after, "value_after: %f\n", value_after);
+  // add_dump_msg(value_after, "cmp: %d\n", cmp);
+  // add_dump_msg(value_after, "-----\n");
+
+  Value *select = Builder.CreateSelect(cmp, one, zero);
   Value *inc = Builder.CreateAdd(counter, select, "eq_inc");
   Builder.CreateStore(inc, ptr);
 }
@@ -344,9 +353,9 @@ static void change_return(Function *C, Instruction *eq_ptr, Instruction *cnt_ptr
       // therefore we return 1
       Value *sub = Builder.CreateSub(cnt, eq, "sub");
 
-      // dump_ret_value(C->getParent(), Builder, cnt);
-      // dump_ret_value(C->getParent(), Builder, eq);
-      // dump_ret_value(C->getParent(), Builder, sub);
+      // add_dump_msg(&BB, "cnt value: %d\n", cnt);
+      // add_dump_msg(&BB, "eq value: %d\n", eq);
+      // add_dump_msg(&BB, "sub value: %d\n", sub);
 
       Value *cmp = Builder.CreateICmpSLE(sub, treshold, "cmp");
       Value *ret = Builder.CreateSelect(cmp, one, zero);
@@ -408,7 +417,7 @@ static void add_counters(Function *C, Instruction *value_before, Instruction *va
   increment_eq_counter(C, value_before, value_after, eq_ptr);
   increment_cnt_counter(C, value_after, cnt_ptr);
 
-#define N_ITER 1000
+#define N_ITER 10000
 #define GAP ((N_ITER / 2) - 1)
   change_return(C, eq_ptr, cnt_ptr, get_constantint(C, GAP));
   limit_num_iter(C, value_after, cnt_ptr, get_constantint(C, N_ITER));
@@ -437,6 +446,7 @@ static void manual_profile(Function *F,
   // InstToFnSamplingMap maps the arithmetic instruction to a sampling function
   std::map<Instruction *, Function *> InstToFnSamplingMap;
 
+  errs() << "Function: " << F->getName() << "\n";
   for (ReachableNodes &rn : stores_in_loop) {
     errs() << "store: " << *rn.get_store() << "\n";
     ValueToValueMapTy Fn_VMap;

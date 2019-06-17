@@ -66,8 +66,7 @@ Function *CloneFunction(Function *F, ValueToValueMapTy &VMap, const Twine &name)
   return NewF;
 }
 
-void add_dump_msg(BasicBlock *BB, const StringRef &msg) {
-  Module *mod = BB->getModule();
+Function* get_printf(Module *mod){
   Function *func_printf = mod->getFunction("printf");
   if (!func_printf) {
     PointerType *Pty = PointerType::get(IntegerType::get(mod->getContext(), 8), 0);
@@ -79,7 +78,13 @@ void add_dump_msg(BasicBlock *BB, const StringRef &msg) {
   //   AttrListPtr func_printf_PAL;
   //   func_printf->setAttributes(func_printf_PAL);
   }
+  return func_printf;
+}
 
+void add_dump_msg(Instruction *I, const StringRef &msg){
+  BasicBlock *BB = I->getParent();
+  Module *mod = BB->getModule();
+  Function *func_printf = get_printf(mod);
   IRBuilder<> Builder(mod->getContext());
   Builder.SetInsertPoint(BB->getTerminator());
 
@@ -87,27 +92,32 @@ void add_dump_msg(BasicBlock *BB, const StringRef &msg) {
   std::vector<Value *> int32_call_params;
   int32_call_params.push_back(str);
 
-  // va_list ap;
-  // va_start(ap, msg);
+  Builder.CreateCall(func_printf, int32_call_params, "call_printf_dump");
 
-  // char *str_ptr = va_arg(ap, char *);
-  // Value *format_ptr = Builder.CreateGlobalStringPtr(str_ptr);
-  // int32_call_params.push_back(format_ptr);
+}
 
-  // std::vector<llvm::Value *> extra;
-  // do {
-  //   llvm::Value *op = va_arg(ap, llvm::Value *);
-  //   if (op) {
-  //     int32_call_params.push_back(op);
-  //   } else {
-  //     break;
-  //   }
-  // } while (1);
-  // va_end(ap);
+void add_dump_msg(Instruction *I, const StringRef &msg, Value *V) {
+  BasicBlock *BB = I->getParent();
+  Module *mod = BB->getModule();
+  Function *func_printf = get_printf(mod);
+  IRBuilder<> Builder(mod->getContext());
+  Builder.SetInsertPoint(BB->getTerminator());
+
+  Value *str = Builder.CreateGlobalStringPtr(msg);
+  std::vector<Value *> int32_call_params;
+  int32_call_params.push_back(str);
+  int32_call_params.push_back(V);
 
   Builder.CreateCall(func_printf, int32_call_params, "call_printf_dump");
 }
 
+void add_dump_msg(BasicBlock *BB, const StringRef &msg){
+  add_dump_msg(BB->getTerminator(), msg);
+}
+
+void add_dump_msg(BasicBlock *BB, const StringRef &msg, Value *V){
+  add_dump_msg(BB->getTerminator(), msg, V);
+}
 
 
 }  // namespace phoenix
