@@ -136,6 +136,8 @@ void insert_if(StoreInst *store, Value *v, Value *constant) {
 
   Value *cmp;
 
+  errs() << "inserting if on: " << *v << "\n";
+
   if (v->getType()->isFloatingPointTy()) {
     cmp = Builder.CreateFCmpONE(v, constant);
   } else {
@@ -162,6 +164,8 @@ void insert_if(StoreInst *store, Value *v, Value *constant) {
   move_marked_to_basic_block(marked, br);
 
   move_from_prev_to_then(BBPrev, BBThen);
+  // add_dump_msg(BBThen, "BBThen\n");
+  // add_dump_msg(BBEnd, "BBEnd\n");
 }
 
 void no_profile(Function *F, StoreInst *store, NodeSet &s){

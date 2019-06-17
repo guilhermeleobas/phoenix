@@ -41,6 +41,7 @@ using namespace llvm;
 
 namespace phoenix {
 
+
 static Loop *get_outer_loop(LoopInfo *LI, BasicBlock *BB) {
   Loop *L = LI->getLoopFor(BB);
 
@@ -130,6 +131,8 @@ static void create_controller(Function *F,
   }
 
   auto *br = Builder.CreateCondBr(cmp, C->getLoopPreheader(), L->getLoopPreheader());
+  // add_dump_msg(C->getLoopPreheader(), "going to clone\n");
+  // add_dump_msg(L->getLoopPreheader(), "going to original loop\n");
   pp->getTerminator()->eraseFromParent();
 }
 
@@ -308,7 +311,7 @@ static void increment_eq_counter(Function *C,
   Builder.CreateStore(inc, ptr);
 }
 
-static void change_return(Function *C, Instruction *eq_ptr, Instruction *cnt_ptr) {
+static void change_return(Function *C, Instruction *eq_ptr, Instruction *cnt_ptr, Value *treshold) {
   auto *I1Ty = Type::getInt1Ty(C->getContext());
   auto *zero = ConstantInt::get(I1Ty, 0);
   auto *one = ConstantInt::get(I1Ty, 1);
@@ -317,10 +320,15 @@ static void change_return(Function *C, Instruction *eq_ptr, Instruction *cnt_ptr
     if (ReturnInst *ri = dyn_cast<ReturnInst>(BB.getTerminator())) {
       IRBuilder<> Builder(ri);
 
+      // cnt is the number of times the sampling function was executed
+      // the default value is 1000
       Instruction *cnt = Builder.CreateLoad(cnt_ptr, "cnt");
       Instruction *eq = Builder.CreateLoad(eq_ptr, "eq");
 
-      Value *cmp = Builder.CreateICmpUGE(cnt, eq, "cmp");
+      // now we need to compare if the eq is greater than a threshold
+      Value *sub = Builder.CreateSub(cnt, eq, "sub");
+
+      Value *cmp = Builder.CreateICmpSGE(sub, treshold, "cmp");
       Value *ret = Builder.CreateSelect(cmp, one, zero);
 
       Builder.CreateRet(ret);
@@ -338,13 +346,13 @@ static BranchInst *get_branch_inst(BasicBlock *BB) {
   return br;
 }
 
-static Value *get_num_iter(Function *F, int num_iter) {
+static Value *get_constantint(Function *F, int num_iter) {
   auto *I32Ty = Type::getInt32Ty(F->getContext());
   return ConstantInt::get(I32Ty, num_iter);
 }
 
-static BasicBlock *find_exit_block(Function *F){
-  for(Instruction &I : instructions(F))
+static BasicBlock *find_exit_block(Function *F) {
+  for (Instruction &I : instructions(F))
     if (isa<ReturnInst>(&I))
       return I.getParent();
 
@@ -355,8 +363,7 @@ static void limit_num_iter(Function *fn,
                            Instruction *entry_point,
                            Instruction *cnt_ptr,
                            Value *num_iter) {
-
-  BasicBlock *exit = find_exit_block(fn); 
+  BasicBlock *exit = find_exit_block(fn);
   BasicBlock *body = entry_point->getParent();
   BasicBlock *prox = body->getUniqueSuccessor();
 
@@ -372,7 +379,6 @@ static void limit_num_iter(Function *fn,
   LoadInst *cnt = Builder.CreateLoad(cnt_ptr);
   Value *cond = Builder.CreateICmpSLT(cnt, num_iter);
   Builder.CreateCondBr(cond, prox, exit);
-
 }
 
 static void add_counters(Function *C, Instruction *value_before, Instruction *value_after) {
@@ -382,10 +388,12 @@ static void add_counters(Function *C, Instruction *value_before, Instruction *va
   increment_eq_counter(C, value_before, value_after, eq_ptr);
   increment_cnt_counter(C, value_after, cnt_ptr);
 
-  change_return(C, eq_ptr, cnt_ptr);
+// #define GAP 501
+#define GAP 501
+  change_return(C, eq_ptr, cnt_ptr, get_constantint(C, GAP));
 
-#define NUM_ITER 500
-  limit_num_iter(C, value_after, cnt_ptr, get_num_iter(C, NUM_ITER));
+#define N_ITER 1000
+  limit_num_iter(C, value_after, cnt_ptr, get_constantint(C, N_ITER));
 }
 
 static void manual_profile(Function *F,
