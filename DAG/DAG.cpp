@@ -66,6 +66,8 @@ void DAG::update_passes(BasicBlock *from, BasicBlock *to) {
   // update LoopInfo
   Loop *L = this->LI->getLoopFor(from);
   L->addBasicBlockToLoop(to, *this->LI);
+
+  this->DT->insertEdge(from, to);
   
   BranchInst *term = cast<BranchInst>(to->getTerminator());
   for (unsigned i = 0; i < term->getNumSuccessors(); ++i){
@@ -75,7 +77,6 @@ void DAG::update_passes(BasicBlock *from, BasicBlock *to) {
     
     // update Dominator Tree
     this->DT->deleteEdge(from, old_to);
-    this->DT->insertEdge(from, to);
     this->DT->insertEdge(to, old_to);
   }
 }
@@ -101,6 +102,9 @@ void DAG::split(BasicBlock *from) {
 //
 void DAG::run_dag_opt(Function &F) {
   auto geps = this->Idtf->get_instructions_of_interest();
+
+  if (geps.size() == 0)
+    return;
 
   std::vector<ReachableNodes> reachables;
 

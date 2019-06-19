@@ -107,6 +107,7 @@ void ProgramSlicing::set_entry_block(Function *F, Loop *L) {
 
 void ProgramSlicing::set_exit_block(Function *F, Loop *L) {
   BasicBlock *L_exit = L->getExitBlock();
+  assert (L_exit != nullptr && "L_exit is nullptr");
   BasicBlock *exit = BasicBlock::Create(F->getContext(), "function_exit", F, L_exit);
 
   IRBuilder<> Builder(exit);
@@ -214,6 +215,7 @@ void ProgramSlicing::slice(Function *F, Instruction *I) {
   LoopInfo LI(DT);
 
   Loop *L = remove_loops_outside_chain(LI, I->getParent());
+  assert (L != nullptr && "Loop is null!");
   // errs() << "Loop: " << *L << "\n";
 
   set_entry_block(F, L);
