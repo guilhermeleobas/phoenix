@@ -36,7 +36,7 @@
 #define DEBUG_TYPE "DAG"
 
 enum OptType {
-  No,
+  NoProfile,
   Inner,
   Outer,
   Silent,
@@ -46,7 +46,7 @@ cl::opt<OptType> DagInstrumentation(
     "dag-opt",
     cl::desc("Type of instrumentation"),
     cl::init(OptType::Silent),
-    cl::values(clEnumValN(OptType::No, "no", "no profilling at all"),
+    cl::values(clEnumValN(OptType::NoProfile, "noprofile", "no profilling at all"),
                clEnumValN(OptType::Inner, "inner", "Inner loop profile"),
                clEnumValN(OptType::Silent, "silent", "just check if the store is silent"),
                clEnumValN(OptType::Outer, "outer", "Outer loop profiler!")));
@@ -147,7 +147,7 @@ void DAG::run_dag_opt(Function &F) {
     case OptType::Inner:
       phoenix::inner_profile(&F, reachables);
       break;
-    case OptType::No:
+    case OptType::NoProfile:
       phoenix::no_profile(&F, reachables);
     default:
       phoenix::check_silent_store(&F, reachables);
