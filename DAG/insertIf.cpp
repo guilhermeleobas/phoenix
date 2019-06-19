@@ -168,6 +168,23 @@ void insert_if(StoreInst *store, Value *v, Value *constant) {
   // add_dump_msg(BBEnd, "BBEnd\n");
 }
 
+void insert_on_store(Function *F, ReachableNodes &rn){
+  StoreInst *store = rn.get_store();
+  LoadInst *load = rn.get_load();
+  Instruction *arith = rn.get_arith_inst();
+  // @load = Load *ptr
+  // @arith = @load op @other
+  // Store @arith, *ptr
+  // the store is silent if @arith == @load
+  insert_if(store, arith, load);
+}
+
+void check_silent_store(Function *F, std::vector<ReachableNodes> &reachables){
+  for (ReachableNodes &rn : reachables){
+    insert_on_store(F, rn);
+  }
+}
+
 void no_profile(Function *F, StoreInst *store, NodeSet &s){
   for (auto *node : s){
     Value *value = node->getValue();

@@ -41,7 +41,6 @@ using namespace llvm;
 
 namespace phoenix {
 
-
 static Loop *get_outer_loop(LoopInfo *LI, BasicBlock *BB) {
   Loop *L = LI->getLoopFor(BB);
 
@@ -97,10 +96,10 @@ static BasicBlock *split_pre_header(Loop *L, LoopInfo *LI, DominatorTree *DT) {
   return pp;
 }
 
-static void dump_ret_value(Module *M, IRBuilder<> &Builder, Value *v){
+static void dump_ret_value(Module *M, IRBuilder<> &Builder, Value *v) {
   // Let's create the function call
   Function *f = M->getFunction("dump");
-  std::vector<Value*> params;
+  std::vector<Value *> params;
 
   // Create the call
   auto *I32Ty = Type::getInt32Ty(M->getContext());
@@ -423,12 +422,12 @@ static void add_counters(Function *C, Instruction *value_before, Instruction *va
   limit_num_iter(C, value_after, cnt_ptr, get_constantint(C, N_ITER));
 }
 
-static void manual_profile(Function *F,
-                           LoopInfo *LI,
-                           DominatorTree *DT,
-                           // the set of stores that are in the same loop chain
-                           std::vector<ReachableNodes> &stores_in_loop,
-                           unsigned num_stores) {
+static void outer_profile(Function *F,
+                          LoopInfo *LI,
+                          DominatorTree *DT,
+                          // the set of stores that are in the same loop chain
+                          std::vector<ReachableNodes> &stores_in_loop,
+                          unsigned num_stores) {
   // Clone the loop;
   ValueToValueMapTy Loop_VMap;
 
@@ -479,10 +478,10 @@ static void manual_profile(Function *F,
   }
 }
 
-void manual_profile(Function *F,
-                    LoopInfo *LI,
-                    DominatorTree *DT,
-                    std::vector<ReachableNodes> &reachables) {
+void outer_profile(Function *F,
+                   LoopInfo *LI,
+                   DominatorTree *DT,
+                   std::vector<ReachableNodes> &reachables) {
   std::map<Loop *, std::vector<ReachableNodes>> mapa;
 
   if (reachables.empty())
@@ -498,7 +497,7 @@ void manual_profile(Function *F,
   // Then, we create a copy of the outer loop alongside each sampling function
   for (auto kv : mapa) {
     DT->recalculate(*F);
-    manual_profile(F, LI, DT, kv.second, kv.second.size());
+    outer_profile(F, LI, DT, kv.second, kv.second.size());
   }
 
   // F->viewCFG();

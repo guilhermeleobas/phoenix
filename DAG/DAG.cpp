@@ -36,18 +36,20 @@
 #define DEBUG_TYPE "DAG"
 
 enum OptType {
-  None,
-  Manual,
-  Automatic,
+  No,
+  Inner,
+  Outer,
+  Silent,
 };
 
 cl::opt<OptType> DagInstrumentation(
     "dag-opt",
     cl::desc("Type of instrumentation"),
-    cl::init(OptType::None),
-    cl::values(clEnumValN(OptType::None, "none", "no instrumentation at all"),
-               clEnumValN(OptType::Automatic, "auto", "automatic loop profile"),
-               clEnumValN(OptType::Manual, "manual", "profile using a handwritten function call")));
+    cl::init(OptType::Silent),
+    cl::values(clEnumValN(OptType::No, "no", "no profilling at all"),
+               clEnumValN(OptType::Inner, "inner", "Inner loop profile"),
+               clEnumValN(OptType::Silent, "silent", "just check if the store is silent"),
+               clEnumValN(OptType::Outer, "outer", "Outer loop profiler!")));
 
 // This should implement a cost model
 // Right now we only insert the `if` if the depth is >= threshold(1)
@@ -139,14 +141,16 @@ void DAG::run_dag_opt(Function &F) {
   }
 
   switch (DagInstrumentation) {
-    case OptType::Manual:
-      phoenix::manual_profile(&F, this->LI, this->DT, reachables);
+    case OptType::Outer:
+      phoenix::outer_profile(&F, this->LI, this->DT, reachables);
       break;
-    case OptType::Automatic:
-      phoenix::auto_profile(&F, reachables);
+    case OptType::Inner:
+      phoenix::inner_profile(&F, reachables);
       break;
-    default:
+    case OptType::No:
       phoenix::no_profile(&F, reachables);
+    default:
+      phoenix::check_silent_store(&F, reachables);
   }
 }
 
