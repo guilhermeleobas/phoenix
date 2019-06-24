@@ -294,9 +294,10 @@ void dump_by_type(arithmetic_inst *ai) {
 void dump_arith() {
   FILE *f = fopen("arith.txt", "w");
 
+  fprintf(f, "Instruction,static_instances,dyn_eq,dyn_total\n");
   for (int i = 0; i < LENGTH; i++) {
     dump_by_type(&data[i]);
-    fprintf(f, "%s,%llu,%llu\n", data[i].name, data[i].identity_exec,
+    fprintf(f, "%s,%d,%llu,%llu\n", data[i].name, data[i].size, data[i].identity_exec,
             data[i].total_exec);
   }
   fprintf(f, "\n");
