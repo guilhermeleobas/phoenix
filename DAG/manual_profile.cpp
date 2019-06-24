@@ -87,10 +87,15 @@ static BasicBlock *split_pre_header(Loop *L, LoopInfo *LI, DominatorTree *DT) {
   Instruction *SplitPtr = &*ph->begin();
   auto *pp = llvm::SplitBlock(ph, SplitPtr, DT, LI);
   std::swap(pp, ph);
-  for (Instruction &I : *pp) {
+  std::vector<Instruction*> insts;
+  for (Instruction &I : *pp){
     if (isa<TerminatorInst>(&I))
       break;
-    I.moveBefore(&*ph->begin());
+    insts.push_back(&I);
+  }
+  
+  for (Instruction *I : insts){
+    I->moveBefore(&*ph->begin());
   }
   // pp is the pre preHeader
   return pp;
@@ -486,14 +491,14 @@ void outer_profile(Function *F,
 
   if (reachables.empty())
     return;
-
+  
   // First we map stores in the same outer loop into a Map
   for (ReachableNodes &r : reachables) {
     BasicBlock *BB = r.get_store()->getParent();
     Loop *L = get_outer_loop(LI, BB);
     mapa[L].push_back(r);
   }
-
+  
   // Then, we create a copy of the outer loop alongside each sampling function
   for (auto kv : mapa) {
     DT->recalculate(*F);
