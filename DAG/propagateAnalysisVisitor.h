@@ -67,6 +67,7 @@ Value* getIdentity(Instruction *I, const Geps *g) {
   case Instruction::Shl:
   case Instruction::LShr:
   case Instruction::AShr:
+  case Instruction::Or:
     return ConstantInt::get(I->getType(), 0);
   //
   case Instruction::Mul:
@@ -82,7 +83,6 @@ Value* getIdentity(Instruction *I, const Geps *g) {
     return ConstantFP::get(I->getType(), 1.0);
 
   case Instruction::And:
-  case Instruction::Or:
     return g->get_p_before();
   default:
     std::string str = "Instruction not supported: ";

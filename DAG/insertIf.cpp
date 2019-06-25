@@ -136,7 +136,7 @@ void insert_if(StoreInst *store, Value *v, Value *constant) {
 
   Value *cmp;
 
-  errs() << "inserting if on: " << *v << "\n";
+  errs() << "inserting if on: " << *v << " with constant: " << *constant << "\n";
 
   if (v->getType()->isFloatingPointTy()) {
     cmp = Builder.CreateFCmpONE(v, constant);
