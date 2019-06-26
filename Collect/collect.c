@@ -10,23 +10,23 @@ void record_load(long long id, void *address) {
   records[id] = address;
 }
 
-void record_store(long long store_id, void *address) {
-  // printf("Record store(%d) %p\n", store_id, address);
+// void record_store(long long store_id, void *address) {
+//   // printf("Record store(%d) %p\n", store_id, address);
 
-  int i = 0;
-  while (dependency[store_id][i] != -1) {
-    int load_id = dependency[store_id][i];
+//   int i = 0;
+//   while (dependency[store_id][i] != -1) {
+//     int load_id = dependency[store_id][i];
 
-    // printf("\tload(%d): %p\n", load_id, records[load_id]);
+//     // printf("\tload(%d): %p\n", load_id, records[load_id]);
 
-    if (records[load_id] == address) {
-      store_after_load++;
-      return;
-    }
+//     if (records[load_id] == address) {
+//       store_after_load++;
+//       return;
+//     }
 
-    i++;
-  }
-}
+//     i++;
+//   }
+// }
 
 void count_store() { num_dynamic_stores++; }
 
@@ -304,3 +304,48 @@ void dump_arith() {
 
   fclose(f);
 }
+
+
+
+/////////////////////////
+
+
+void realloc_records(unsigned new_size){
+  r = (record*) realloc(r, sizeof(record) * new_size); 
+  for (int i=size; i<new_size; i++){
+    r[i].store_id = i;
+    r[i].is_marked = 0;
+    r[i].silent = 0;
+    r[i].total = 0;
+  }
+
+  size = new_size;
+}
+
+void record_store(unsigned store_id, unsigned is_marked, unsigned is_equals){
+  if (store_id >= size)
+    realloc_records(store_id+1);
+
+  r[store_id].is_marked = is_marked;
+  if (is_equals)
+    r[store_id].silent++;
+  r[store_id].total++;
+}
+
+void dump_records(){
+  FILE *f = fopen("store.txt", "w");
+
+  fprintf(f, "id,marked,silent,total\n");
+  for (int i = 0; i < size; i++) {
+    fprintf(f, "%d,%d,%llu,%llu\n", r[i].store_id, r[i].is_marked, r[i].silent, r[i].total);
+  }
+  fprintf(f, "\n");
+
+  fclose(f);
+
+}
+
+
+
+
+

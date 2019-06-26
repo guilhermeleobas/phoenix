@@ -38,7 +38,7 @@ static long long num_dynamic_stores = 0;
 static int **dependency;
 
 void record_load(long long, void *);
-void record_store(long long, void *);
+// void record_store(long long, void *);
 void count_store();
 
 void init_instrumentation(unsigned total_static_stores,
@@ -108,3 +108,24 @@ void record_arith_int(unsigned opcode, long long static_id, long long a,
 void record_arith_float(unsigned opcode, long long static_id, double a,
                         double b, void *dest_address, void *op_address,
                         unsigned op_pos);
+
+
+//
+
+typedef struct {
+  unsigned store_id;
+  unsigned is_marked;
+  unsigned long long silent;
+  unsigned long long total;
+} record;
+
+unsigned size = 0;
+
+record *r = NULL;
+
+void realloc_records(unsigned new_size);
+void record_store(unsigned store_id, unsigned is_marked, unsigned is_equals);
+void dump_records();
+
+
+
