@@ -322,7 +322,7 @@ void realloc_records(unsigned new_size){
   size = new_size;
 }
 
-void record_store(unsigned store_id, unsigned is_marked, unsigned is_equals){
+void record_store(unsigned store_id, unsigned is_marked, int is_equals){
   if (store_id >= size)
     realloc_records(store_id+1);
 
@@ -334,7 +334,6 @@ void record_store(unsigned store_id, unsigned is_marked, unsigned is_equals){
 
 void dump_records(){
   FILE *f = fopen("store.txt", "w");
-
   fprintf(f, "id,marked,silent,total\n");
   for (int i = 0; i < size; i++) {
     fprintf(f, "%d,%d,%llu,%llu\n", r[i].store_id, r[i].is_marked, r[i].silent, r[i].total);

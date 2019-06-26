@@ -86,14 +86,14 @@ void Store::track_store(Module *M, StoreInst *S, unsigned store_id, bool is_mark
 
   Value *cmp;
   if (val->getType()->isFloatingPointTy()) {
-    cmp = Builder.CreateFCmpONE(val, load);
+    cmp = Builder.CreateFCmpOEQ(val, load);
   } else {
-    cmp = Builder.CreateICmpNE(val, load);
+    cmp = Builder.CreateICmpEQ(val, load);
   }
 
   Value *store_id_value = get_constantint(M, store_id);
   Value *is_marked_value = get_constantint(M, is_marked);
-  Value *cmp_value = Builder.CreateSExt(cmp, Builder.getInt64Ty());
+  Value *cmp_value = Builder.CreateZExt(cmp, Builder.getInt64Ty());
 
   create_call(M, S, "record_store", store_id_value, is_marked_value, cmp_value);
 }

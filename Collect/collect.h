@@ -124,7 +124,7 @@ unsigned size = 0;
 record *r = NULL;
 
 void realloc_records(unsigned new_size);
-void record_store(unsigned store_id, unsigned is_marked, unsigned is_equals);
+void record_store(unsigned store_id, unsigned is_marked, int is_equals);
 void dump_records();
 
 
