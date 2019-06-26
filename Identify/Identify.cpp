@@ -41,7 +41,7 @@ bool Identify::is_arith_inst_of_interest(Instruction *I) {
   case Instruction::Shl:
   case Instruction::LShr:
   case Instruction::AShr:
-  case Instruction::And:
+  // case Instruction::And:
   case Instruction::Or:
   case Instruction::Xor:
   case Instruction::FAdd:
