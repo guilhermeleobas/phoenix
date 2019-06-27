@@ -149,6 +149,7 @@ void DAG::run_dag_opt(Function &F) {
       break;
     case OptType::NoProfile:
       phoenix::no_profile(&F, reachables);
+      break;
     default:
       phoenix::check_silent_store(&F, reachables);
   }

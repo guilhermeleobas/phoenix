@@ -170,13 +170,16 @@ void ProgramSlicing::connect_header_to_body(Loop *L, BasicBlock *body){
   assert(isa<BranchInst>(term) && "term is not a branch inst");
   BranchInst *br = cast<BranchInst>(term);
 
-  assert(br->getNumSuccessors() == 2 && "branch instruction has more/less than 2 successors");
+  errs() << "loop: " << *L << "\n";
+  // assert(br->getNumSuccessors() == 2 && "branch instruction has more/less than 2 successors");
 
-  if (br->getSuccessor(0) != exit){
-    br->setSuccessor(0, body);
-  }
-  else {
-    br->setSuccessor(1, body);
+  if (br->getNumSuccessors() == 2){
+    if (br->getSuccessor(0) != exit){
+      br->setSuccessor(0, body);
+    }
+    else {
+      br->setSuccessor(1, body);
+    }
   }
 }
 
