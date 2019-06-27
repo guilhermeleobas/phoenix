@@ -119,7 +119,7 @@ typedef struct {
   unsigned long long total;
 } record;
 
-unsigned size = 0;
+unsigned __size = 0;
 
 record *r = NULL;
 
