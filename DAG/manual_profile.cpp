@@ -141,12 +141,10 @@ static void create_controller(Function *F,
   }
 
   Value *cmp = calls[0];
-  // dump_ret_value(F->getParent(), Builder, cmp);
 
   for (unsigned i = 1; i < calls.size(); i++) {
-    // cmp = Builder.CreateOr(cmp, calls[i]);
-    cmp = Builder.CreateAnd(cmp, calls[i]);
-    // dump_ret_value(F->getParent(), Builder, cmp);
+    cmp = Builder.CreateOr(cmp, calls[i]);
+    // cmp = Builder.CreateAnd(cmp, calls[i]);
   }
 
   auto *br = Builder.CreateCondBr(cmp, C->getLoopPreheader(), L->getLoopPreheader());
@@ -324,14 +322,14 @@ static void increment_eq_counter(Function *C,
 
   Value *cmp;
   if (value_after->getType()->isFloatingPointTy())
-    cmp = Builder.CreateFCmpUEQ(value_before, value_after, "fcmp");
+    cmp = Builder.CreateFCmpOEQ(value_before, value_after, "fcmp");
   else
     cmp = Builder.CreateICmpEQ(value_before, value_after, "cmp");
 
-  // add_dump_msg(value_before, "value_before: %f\n", value_after);
+  // add_dump_msg(value_after, "-----\n");
+  // add_dump_msg(value_before, "value_before: %f\n", value_before);
   // add_dump_msg(value_after, "value_after: %f\n", value_after);
   // add_dump_msg(value_after, "cmp: %d\n", cmp);
-  // add_dump_msg(value_after, "-----\n");
 
   Value *select = Builder.CreateSelect(cmp, one, zero);
   Value *inc = Builder.CreateAdd(counter, select, "eq_inc");
@@ -421,8 +419,8 @@ static void add_counters(Function *C, Instruction *value_before, Instruction *va
   increment_eq_counter(C, value_before, value_after, eq_ptr);
   increment_cnt_counter(C, value_after, cnt_ptr);
 
-#define N_ITER 10000
-#define GAP ((N_ITER / 2) - 1)
+#define N_ITER 1000
+#define GAP ((N_ITER / 2) + 1)
   change_return(C, eq_ptr, cnt_ptr, get_constantint(C, GAP));
   limit_num_iter(C, value_after, cnt_ptr, get_constantint(C, N_ITER));
 }

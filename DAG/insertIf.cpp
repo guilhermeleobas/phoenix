@@ -23,10 +23,10 @@
 #include <queue>
 
 #include "../Identify/Geps.h"
-#include "utils.h"
-#include "ReachableNodes.h"
 #include "NodeSet.h"
+#include "ReachableNodes.h"
 #include "insertIf.h"
+#include "utils.h"
 
 #define DEBUG_TYPE "DAG"
 
@@ -34,8 +34,7 @@ using namespace llvm;
 
 namespace phoenix {
 
-llvm::SmallVector<Instruction *, 10> mark_instructions_to_be_moved(
-    StoreInst *store) {
+llvm::SmallVector<Instruction *, 10> mark_instructions_to_be_moved(StoreInst *store) {
   std::queue<Instruction *> q;
   llvm::SmallVector<Instruction *, 10> marked;
 
@@ -55,12 +54,11 @@ llvm::SmallVector<Instruction *, 10> mark_instructions_to_be_moved(
                   [](Value *v) { DEBUG(errs() << "mark: " << *v << "\n"); });
 
     // Check if *v is only used in instructions already marked
-    bool all_marked = std::all_of(
-        begin(v->users()), end(v->users()), [&v, &marked](Value *user) {
-          if (cast<Instruction>(user)->getParent() != v->getParent())
-            return false;
-          return find(marked, user) != marked.end();
-        });
+    bool all_marked = std::all_of(begin(v->users()), end(v->users()), [&v, &marked](Value *user) {
+      if (cast<Instruction>(user)->getParent() != v->getParent())
+        return false;
+      return find(marked, user) != marked.end();
+    });
 
     if (!all_marked) {
       DEBUG(dbgs() << "-> Ignoring: " << *v << "\n");
@@ -79,7 +77,8 @@ llvm::SmallVector<Instruction *, 10> mark_instructions_to_be_moved(
             continue;
           }
 
-          if (isa<PHINode>(inst)) continue;
+          if (isa<PHINode>(inst))
+            continue;
 
           q.push(inst);
         }
@@ -90,8 +89,7 @@ llvm::SmallVector<Instruction *, 10> mark_instructions_to_be_moved(
   return marked;
 }
 
-void move_marked_to_basic_block(
-    llvm::SmallVector<Instruction *, 10> &marked, Instruction *br) {
+void move_marked_to_basic_block(llvm::SmallVector<Instruction *, 10> &marked, Instruction *br) {
   for (Instruction *inst : reverse(marked)) {
     inst->moveBefore(br);
   }
@@ -100,13 +98,14 @@ void move_marked_to_basic_block(
 void move_from_prev_to_then(BasicBlock *BBPrev, BasicBlock *BBThen) {
   llvm::SmallVector<Instruction *, 10> list;
 
-  for (BasicBlock::reverse_iterator b = BBPrev->rbegin(), e = BBPrev->rend();
-       b != e; ++b) {
+  for (BasicBlock::reverse_iterator b = BBPrev->rbegin(), e = BBPrev->rend(); b != e; ++b) {
     Instruction *I = &*b;
 
-    if (isa<PHINode>(I) || isa<BranchInst>(I)) continue;
+    if (isa<PHINode>(I) || isa<BranchInst>(I))
+      continue;
 
-    if (begin(I->users()) == end(I->users())) continue;
+    if (begin(I->users()) == end(I->users()))
+      continue;
 
     // Move I from BBPrev to BBThen iff all users of I are in BBThen
     //
@@ -117,11 +116,10 @@ void move_from_prev_to_then(BasicBlock *BBPrev, BasicBlock *BBThen) {
     //  gives us the guarantee that all users of I living in the same BB were
     //  previously visited.
 
-    bool can_move_I =
-        std::all_of(begin(I->users()), end(I->users()), [&BBThen](User *U) {
-          BasicBlock *parent = dyn_cast<Instruction>(U)->getParent();
-          return (parent == BBThen);
-        });
+    bool can_move_I = std::all_of(begin(I->users()), end(I->users()), [&BBThen](User *U) {
+      BasicBlock *parent = dyn_cast<Instruction>(U)->getParent();
+      return (parent == BBThen);
+    });
 
     if (can_move_I) {
       DEBUG(dbgs() << "[BBPrev -> BBThen] " << *I << "\n");
@@ -136,7 +134,8 @@ void insert_if(StoreInst *store, Value *v, Value *constant) {
 
   Value *cmp;
 
-  errs() << "inserting if on: " << *v << " with constant: " << *constant << "\n";
+  errs() << "[" << store->getFunction()->getName() << "]: "
+         << "inserting if on: " << *v << " with constant: " << *constant << "\n";
 
   if (v->getType()->isFloatingPointTy()) {
     cmp = Builder.CreateFCmpONE(v, constant);
@@ -144,8 +143,8 @@ void insert_if(StoreInst *store, Value *v, Value *constant) {
     cmp = Builder.CreateICmpNE(v, constant);
   }
 
-  TerminatorInst *br = llvm::SplitBlockAndInsertIfThen(
-      cmp, dyn_cast<Instruction>(cmp)->getNextNode(), false);
+  TerminatorInst *br =
+      llvm::SplitBlockAndInsertIfThen(cmp, dyn_cast<Instruction>(cmp)->getNextNode(), false);
 
   BasicBlock *BBThen = br->getParent();
   BasicBlock *BBPrev = BBThen->getSinglePredecessor();
@@ -155,11 +154,9 @@ void insert_if(StoreInst *store, Value *v, Value *constant) {
 
   store->moveBefore(br);
 
-  llvm::SmallVector<Instruction *, 10> marked =
-      mark_instructions_to_be_moved(store);
+  llvm::SmallVector<Instruction *, 10> marked = mark_instructions_to_be_moved(store);
 
-  for_each(marked,
-           [](Instruction *inst) { DEBUG(dbgs() << " Marked: " << *inst << "\n"); });
+  for_each(marked, [](Instruction *inst) { DEBUG(dbgs() << " Marked: " << *inst << "\n"); });
 
   move_marked_to_basic_block(marked, br);
 
@@ -168,7 +165,7 @@ void insert_if(StoreInst *store, Value *v, Value *constant) {
   // add_dump_msg(BBEnd, "BBEnd\n");
 }
 
-void insert_on_store(Function *F, ReachableNodes &rn){
+void insert_on_store(Function *F, ReachableNodes &rn) {
   StoreInst *store = rn.get_store();
   LoadInst *load = rn.get_load();
   Instruction *arith = rn.get_arith_inst();
@@ -179,36 +176,25 @@ void insert_on_store(Function *F, ReachableNodes &rn){
   insert_if(store, arith, load);
 }
 
-void check_silent_store(Function *F, std::vector<ReachableNodes> &reachables){
-  for (ReachableNodes &rn : reachables){
+void check_silent_store(Function *F, std::vector<ReachableNodes> &reachables) {
+  for (ReachableNodes &rn : reachables) {
     insert_on_store(F, rn);
   }
 }
 
-void no_profile(Function *F, StoreInst *store, NodeSet &s){
-  for (auto *node : s){
+void no_profile(Function *F, StoreInst *store, NodeSet &s) {
+  for (auto *node : s) {
     Value *value = node->getValue();
     Value *constant = node->getConstant();
     insert_if(store, value, constant);
   }
 }
 
-void no_profile(Function *F, std::vector<ReachableNodes> &reachables){
-  for (ReachableNodes &r : reachables){
+void no_profile(Function *F, std::vector<ReachableNodes> &reachables) {
+  for (ReachableNodes &r : reachables) {
     NodeSet nodes = r.get_nodeset();
     no_profile(F, r.get_store(), nodes);
   }
 }
 
-
-
-
-
-
-
-
-
-
-
-
-}; // end namespace phoenix
+};  // end namespace phoenix

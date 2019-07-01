@@ -86,6 +86,9 @@ Instruction *create_switch(Function *F, BasicBlock *BB, BasicBlock *BBProfile, B
     }
   }
 
+  // add_dump_msg(BBOpt, "going to opt\n");
+  // add_dump_msg(BB, "going to original\n");
+
   return switch_control_ptr;
 }
 
