@@ -49,6 +49,11 @@ class DepthVisitor : public Visitor {
       return;
     }
 
+    if ((binary->left->hasConstant() || binary->right->hasConstant()) &&
+        !(binary->left->hasConstant() && binary->right->hasConstant())) {
+      s.insert(binary);
+    }
+
     binary->left->accept(*this);
     binary->right->accept(*this);
 

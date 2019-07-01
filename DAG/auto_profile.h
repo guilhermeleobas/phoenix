@@ -130,7 +130,7 @@ AllocaInst *create_c2(Function *F, BasicBlock *BBProfile, Value *before, Value *
   else
     cmp = Builder.CreateICmpEQ(before, after, "cmp.profile");
 
-  Value *select = Builder.CreateSelect(cmp, zero, one);
+  Value *select = Builder.CreateSelect(cmp, one, zero);
 
   LoadInst *load_c2 = Builder.CreateLoad(c2_ptr, "c2.load");
   Value *c2_inc = Builder.CreateAdd(load_c2, select, "c2.inc");
