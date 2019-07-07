@@ -19,16 +19,15 @@ This README serves me as a form of documentation for future reference.
 
 ## Why do we want to attack this problem?
 
-While working in the silent stores paper[1], we realize that usually the identity tends to silentness. Our idea is to identify when this pattern happens statically and it with the following code:
+when working on the silent store paper[1], we perceive that we can optimize instructions that accepts an identity. This project implements a set of arithmetic speculative optimization at IR level. For instance, consider the matrix multiplication algorithm:
 
 ```
-  if (v != identity_op)
-    *p = *p `op` v
+  C[i,j] += A[i,k]*B[k,j]
 ```
 
-Our idea is to prevent computation as much as possible. We saw on a few polybench benchmarks that by just inserting this `if` we can get a good speedup
+Whenever `A[i,k]` or `B[k,j]` is zero, we don't need to perform the entire computation. We call this type of optimization a ring optimization because the principal operation (the +) admits an identity and the following one (the *) admits an absorbing element which is equals to the identity: identity = absorbing = zero.
 
-[1] Fernando Pereira, ​Guilherme Leobas​​ and Abdoulaye Gamatié. Static Prediction of Silent Stores - ​ACM Transactions on Architecture and Code Optimization​ - July, 2018 (to appear)
+[1] Fernando Pereira, ​Guilherme Leobas​​ and Abdoulaye Gamatié. Static Prediction of Silent Stores - ​ACM Transactions on Architecture and Code Optimization​ - July, 2018 (to appear)
 
 ## LLVM Passes
 
@@ -46,15 +45,17 @@ There are 5 conditions that should be met in order to assume that `I` follows th
   ```
     store %dest, %ptr
   ```
-
   At the moment we only care in optimizing instructions that writes into memory.
 
 3. either `%a` or `%b` must be loaded from the same `%ptr`
   ```
+  %a/%b = load %ptr
+  ```
+
+4. Both %base and %offset should be the same
+  ```
     ptr = getElementPtr %base, %offset
   ```
-Both %base and %offset should be the same
-
 4. Both instructions must be on the same basic block!
 ```
     while (x > 0) {
