@@ -18,9 +18,14 @@ BasicBlock *deep_clone(const BasicBlock *BB,
 
 Function *CloneFunction(Function *F, ValueToValueMapTy &VMap, const Twine &name);
 
+Function* get_rand(Module *mod);
+Function* get_abs(Module *mod, Type *Ty);
+
 void add_dump_msg(BasicBlock *BB, const StringRef &msg);
 void add_dump_msg(BasicBlock *BB, const StringRef &msg, Value *V);
 void add_dump_msg(Instruction *I, const StringRef &msg);
 void add_dump_msg(Instruction *I, const StringRef &msg, Value *V);
+
+void print_instruction(Instruction *I);
 
 };  // end namespace phoenix

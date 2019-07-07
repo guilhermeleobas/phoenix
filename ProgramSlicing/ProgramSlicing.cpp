@@ -89,20 +89,34 @@ bool EliminateUnreachableBlocks(Function &F, bool KeepOneInputPHIs=false) {
   return !DeadBlocks.empty();
 }
 
-void ProgramSlicing::set_entry_block(Function *F, Loop *L) {
+void ProgramSlicing::set_entry_block(Function *F, LoopInfo &LI, Loop *L) {
 
   BasicBlock *preheader = L->getLoopPreheader();
   BasicBlock *entry = &F->getEntryBlock();
   if (entry == preheader)
     return;
 
-  connect_basic_blocks(entry, preheader);
+  // Walk on the parent chain changing the conditional branchs to a direct branch
+  // until we reach *entry
+  BasicBlock *child = preheader;
+  while (child != entry){
+    // if the child belongs to a loop, the parent is the loop preheader;
+    // otherwise, the parent is the loop predecessor
+    BasicBlock *parent = nullptr;
 
-  // BasicBlock *pred = preheader->getUniquePredecessor();
-  // preheader->removePredecessor(pred);
+    if (LI.isLoopHeader(child))
+      parent = LI.getLoopFor(child)->getLoopPreheader();
+    else
+      parent = child->getUniquePredecessor();
 
-  // BranchInst *br = cast<BranchInst>(entry->getTerminator());
-  // br->setSuccessor(0, preheader);
+    assert(parent && "parent == nullptr");
+
+    errs() << "child: " << child->getName() << "\n";
+    errs() << "parent: " << parent->getName() << "\n"; 
+    connect_basic_blocks(parent, child);
+    child = parent;
+  }
+
 }
 
 void ProgramSlicing::set_exit_block(Function *F, Loop *L) {
@@ -130,9 +144,34 @@ void ProgramSlicing::connect_basic_blocks(BasicBlock *to, BasicBlock *from){
   term->eraseFromParent();
 }
 
+void ProgramSlicing::connect_body_to_latch(BasicBlock *body, BasicBlock *latch){
+  connect_basic_blocks(body, latch);
+}
+
+void ProgramSlicing::connect_header_to_body(Loop *L, BasicBlock *body){
+  BasicBlock *header = L->getHeader();
+  BasicBlock *exit = L->getExitBlock();
+
+  Instruction *term = header->getTerminator();
+  assert(isa<BranchInst>(term) && "term is not a branch inst");
+  BranchInst *br = cast<BranchInst>(term);
+
+  // assert(br->getNumSuccessors() == 2 && "branch instruction has more/less than 2 successors");
+
+  if (br->getNumSuccessors() == 2){
+    if (br->getSuccessor(0) != exit){
+      br->setSuccessor(0, body);
+    }
+    else {
+      br->setSuccessor(1, body);
+    }
+  }
+}
+
 Loop *ProgramSlicing::remove_loops_outside_chain(Loop *parent, Loop *child) {
-  if (parent == nullptr)
+  if (parent == nullptr){
     return child;
+  }
 
   for (Loop *sub : parent->getSubLoops()){
     if (sub == child)
@@ -157,32 +196,6 @@ Loop *ProgramSlicing::remove_loops_outside_chain(Loop *parent, Loop *child) {
 
   return remove_loops_outside_chain(parent->getParentLoop(), parent);
 }
-
-void ProgramSlicing::connect_body_to_latch(BasicBlock *body, BasicBlock *latch){
-  connect_basic_blocks(body, latch);
-}
-
-void ProgramSlicing::connect_header_to_body(Loop *L, BasicBlock *body){
-  BasicBlock *header = L->getHeader();
-  BasicBlock *exit = L->getExitBlock();
-
-  Instruction *term = header->getTerminator();
-  assert(isa<BranchInst>(term) && "term is not a branch inst");
-  BranchInst *br = cast<BranchInst>(term);
-
-  errs() << "loop: " << *L << "\n";
-  // assert(br->getNumSuccessors() == 2 && "branch instruction has more/less than 2 successors");
-
-  if (br->getNumSuccessors() == 2){
-    if (br->getSuccessor(0) != exit){
-      br->setSuccessor(0, body);
-    }
-    else {
-      br->setSuccessor(1, body);
-    }
-  }
-}
-
 
 Loop *ProgramSlicing::remove_loops_outside_chain(LoopInfo &LI, BasicBlock *BB) {
   Loop *L = LI.getLoopFor(BB);
@@ -219,9 +232,8 @@ void ProgramSlicing::slice(Function *F, Instruction *I) {
 
   Loop *L = remove_loops_outside_chain(LI, I->getParent());
   assert (L != nullptr && "Loop is null!");
-  // errs() << "Loop: " << *L << "\n";
 
-  set_entry_block(F, L);
+  set_entry_block(F, LI, L);
   set_exit_block(F, L);
 
   EliminateUnreachableBlocks(*F);

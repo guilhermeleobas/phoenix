@@ -34,7 +34,6 @@ namespace phoenix {
 static void outer_profile(Function *F,
                           LoopInfo *LI,
                           DominatorTree *DT,
-                          PostDominatorTree *PDT,
                           std::vector<ReachableNodes> &stores_in_loop,
                           unsigned num_stores);
 

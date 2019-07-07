@@ -14,10 +14,12 @@
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Pass.h"
+#include "llvm/Passes/PassBuilder.h"
 #include "llvm/Support/Debug.h"  // To print error messages.
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"  // For dbgs()
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
+#include "llvm/Transforms/Utils/LoopUtils.h"
 
 #include <queue>
 
@@ -87,14 +89,14 @@ static BasicBlock *split_pre_header(Loop *L, LoopInfo *LI, DominatorTree *DT) {
   Instruction *SplitPtr = &*ph->begin();
   auto *pp = llvm::SplitBlock(ph, SplitPtr, DT, LI);
   std::swap(pp, ph);
-  std::vector<Instruction*> insts;
-  for (Instruction &I : *pp){
+  std::vector<Instruction *> insts;
+  for (Instruction &I : *pp) {
     if (isa<TerminatorInst>(&I))
       break;
     insts.push_back(&I);
   }
-  
-  for (Instruction *I : insts){
+
+  for (Instruction *I : insts) {
     I->moveBefore(&*ph->begin());
   }
   // pp is the pre preHeader
@@ -321,15 +323,36 @@ static void increment_eq_counter(Function *C,
   LoadInst *counter = Builder.CreateLoad(ptr, "eq_counter");
 
   Value *cmp;
-  if (value_after->getType()->isFloatingPointTy())
-    cmp = Builder.CreateFCmpOEQ(value_before, value_after, "fcmp");
-  else
-    cmp = Builder.CreateICmpEQ(value_before, value_after, "cmp");
 
-  // add_dump_msg(value_after, "-----\n");
-  // add_dump_msg(value_before, "value_before: %f\n", value_before);
-  // add_dump_msg(value_after, "value_after: %f\n", value_after);
-  // add_dump_msg(value_after, "cmp: %d\n", cmp);
+  errs() << "value before: " << *value_before << "\n";
+  errs() << "value after: " << *value_after << "\n";
+  if (value_after->getType()->isFloatingPointTy()){
+    // Value *sub = Builder.CreateFSub(value_before, value_after);
+
+    // add_dump_msg(value_after, "sub: %.10f\n", sub);
+
+    // Module *M = C->getParent();
+    // Function *abs = get_abs(M, value_after->getType());
+    // std::vector<Value*> params;
+    // params.push_back(sub);
+    // CallInst *value = Builder.CreateCall(abs, params);
+    // Constant *eps = ConstantFP::get(value_before->getType(), 20.0);
+    // cmp = Builder.CreateFCmpOLT(value_before, eps, "fcmp");
+    cmp = Builder.CreateFCmpOEQ(value_before, value_after, "fcmp");
+  }
+  else {
+    cmp = Builder.CreateICmpEQ(value_before, value_after, "cmp");
+  }
+
+  add_dump_msg(value_after, "----BEGIN----\n");
+  add_dump_msg(value_before, "before: %.3lf\n", value_before);
+  // add_dump_msg(value_after, "op0: %.20lf\n", value_after->getOperand(0));
+  // add_dump_msg(value_after, "op1: %.20lf\n", value_after->getOperand(1));
+  // add_dump_msg(value_after, "op1/op0: %.5f\n", cast<Instruction>(value_after->getOperand(1))->getOperand(0));
+  // add_dump_msg(value_after, "op1/op1: %.5f\n", cast<Instruction>(value_after->getOperand(1))->getOperand(1));
+  add_dump_msg(value_after, "after: %.3lf\n", value_after);
+  add_dump_msg(value_after, "cmp: %d\n", cmp);
+  // add_dump_msg(value_after, "----END----\n");
 
   Value *select = Builder.CreateSelect(cmp, one, zero);
   Value *inc = Builder.CreateAdd(counter, select, "eq_inc");
@@ -355,9 +378,12 @@ static void change_return(Function *C, Instruction *eq_ptr, Instruction *cnt_ptr
       // therefore we return 1
       Value *sub = Builder.CreateSub(cnt, eq, "sub");
 
-      // add_dump_msg(&BB, "cnt value: %d\n", cnt);
-      // add_dump_msg(&BB, "eq value: %d\n", eq);
-      // add_dump_msg(&BB, "sub value: %d\n", sub);
+      add_dump_msg(&BB, "function: ");
+      add_dump_msg(&BB, C->getName());
+      add_dump_msg(&BB, "\n");
+      add_dump_msg(&BB, "cnt value: %d\n", cnt);
+      add_dump_msg(&BB, "eq value: %d\n", eq);
+      add_dump_msg(&BB, "sub value: %d\n", sub);
 
       Value *cmp = Builder.CreateICmpSLE(sub, treshold, "cmp");
       Value *ret = Builder.CreateSelect(cmp, one, zero);
@@ -377,9 +403,13 @@ static BranchInst *get_branch_inst(BasicBlock *BB) {
   return br;
 }
 
-static Value *get_constantint(Function *F, int num_iter) {
+static Value *get_constantint(Function *F, int num) {
   auto *I32Ty = Type::getInt32Ty(F->getContext());
-  return ConstantInt::get(I32Ty, num_iter);
+  return ConstantInt::get(I32Ty, num);
+}
+
+static Value *get_constantint(Type *T, int num) {
+  return ConstantInt::get(T, num);
 }
 
 static BasicBlock *find_exit_block(Function *F) {
@@ -425,23 +455,147 @@ static void add_counters(Function *C, Instruction *value_before, Instruction *va
   limit_num_iter(C, value_after, cnt_ptr, get_constantint(C, N_ITER));
 }
 
+static bool getIncomingAndBackEdge(Loop *L, BasicBlock *&Incoming, BasicBlock *&Backedge) {
+  BasicBlock *H = L->getHeader();
+
+  Incoming = nullptr;
+  Backedge = nullptr;
+  pred_iterator PI = pred_begin(H);
+  assert(PI != pred_end(H) && "Loop must have at least one backedge!");
+  Backedge = *PI++;
+  if (PI == pred_end(H))
+    return false;  // dead loop
+  Incoming = *PI++;
+  if (PI != pred_end(H))
+    return false;  // multiple backedges?
+
+  if (L->contains(Incoming)) {
+    if (L->contains(Backedge))
+      return false;
+    std::swap(Incoming, Backedge);
+  } else if (!L->contains(Backedge))
+    return false;
+
+  assert(Incoming && Backedge && "expected non-null incoming and backedges");
+  return true;
+}
+
+static Instruction* get_predicate(BasicBlock *BB){
+  Value *term = BB->getTerminator();
+  assert(isa<BranchInst>(term) && "BB TerminatorInst is not a branch inst");
+  BranchInst *br = cast<BranchInst>(term);
+  return cast<Instruction>(br->getCondition());
+}
+
+static PHINode *getInductionVariable(Loop *L) {
+  BasicBlock *H = L->getHeader();
+
+  BasicBlock *Incoming = nullptr, *Backedge = nullptr;
+  if (!getIncomingAndBackEdge(L, Incoming, Backedge))
+    return nullptr;
+
+  // Loop over all of the PHI nodes, looking for a canonical indvar.
+  for (BasicBlock::iterator I = H->begin(); isa<PHINode>(I); ++I) {
+    PHINode *PN = cast<PHINode>(I);
+    if (ConstantInt *CI = dyn_cast<ConstantInt>(PN->getIncomingValueForBlock(Incoming)))
+      if (Instruction *Inc = dyn_cast<Instruction>(PN->getIncomingValueForBlock(Backedge)))
+        if ((Inc->getOpcode() == Instruction::Add && Inc->getOperand(0) == PN) ||
+            (Inc->getOpcode() == Instruction::Sub && Inc->getOperand(0) == PN))
+          if (ConstantInt *CI = dyn_cast<ConstantInt>(Inc->getOperand(1)))
+            return PN;
+  }
+
+  errs() << "returning nullptr\n";
+  return nullptr;
+}
+
+static CallInst* create_call_to_rand(Function *C, IRBuilder<> &Builder){
+  Module *M = C->getParent();
+  Function *rand = get_rand(M);
+  std::vector<Value*> params;
+  return Builder.CreateCall(rand, params, "rand");
+}
+
+static void change_loop_range(Function *C, Loop *L){
+  errs() << "Loop: " << *L << "\n";
+  PHINode *iv = getInductionVariable(L);
+  assert(iv && "iv == nullptr");
+  errs() << "induction variable: " << *iv << "\n";
+
+  Instruction *pred = get_predicate(iv->getParent());
+  Value *mod = pred->getOperand(1);
+  // replace the predicate iff it is a Not equals instruction!
+  if (CmpInst *cmp = dyn_cast<CmpInst>(pred)){
+    if (L->getParentLoop() == nullptr)
+      cmp->setPredicate(CmpInst::Predicate::ICMP_NE);
+    else
+      cmp->setPredicate(CmpInst::Predicate::ICMP_SLT);
+  }
+
+  // add_dump_msg(pred, "pred: %d\n", pred);
+  // add_dump_msg(pred, "first operand: %d\n", pred->getOperand(0));
+  // add_dump_msg(pred, "second operand: %d\n", pred->getOperand(1));
+
+  // iv = PHI [a, %BB1], [I, %BB2], ...
+  for (unsigned i = 0; i < iv->getNumOperands(); i++){
+    if (Instruction *I = dyn_cast<Instruction>(iv->getOperand(i))){
+      errs() << "I: " << *I << "\n";
+      for (int j = 0; j < I->getNumOperands(); j++){
+        if (isa<ConstantInt>(I->getOperand(j))){
+          IRBuilder<> Builder (I);
+          CallInst *call = create_call_to_rand(C, Builder);
+          Value *sext = Builder.CreateSExt(call, Type::getInt64Ty(C->getContext()));
+          Value *rem = Builder.CreateSRem(sext, mod, "rem");
+
+          I->setOperand(j, rem);
+
+          // in the outermost loop, we always take the module of the final value
+          if (L->getParentLoop() == nullptr){
+            Builder.SetInsertPoint(I->getNextNode());
+            Value *final_rem = Builder.CreateSRem(I, mod, "finalrem");
+            // replaces the uses of I with final_rem
+            I->replaceAllUsesWith(final_rem);
+            cast<Instruction>(final_rem)->setOperand(0, I);
+          }
+
+          // add_dump_msg(I, "----\n");
+          // add_dump_msg(I, "var name: ");
+          // add_dump_msg(I, I->getName());
+          // add_dump_msg(I, "\nvar value: %d\n", I->getOperand(j == 0 ? 1 : 0));
+
+          // add_dump_msg(I, "Increment value by: %d\n", rem);
+          // add_dump_msg(I, "mod: %d\n", mod);
+          // add_dump_msg(I, "final value: %d\n", I);
+
+
+          // I->setOperand(j == 0 ? 1 : 0, get_constantint(rem->getType(), 0));
+        }
+      }
+    }
+  }
+}
+
+static void change_ranges(Function *C, Instruction *entry_point) {
+  DominatorTree DT(*C);
+  LoopInfo LI(DT);
+
+  Loop *L = LI.getLoopFor(entry_point->getParent());
+
+  while(true){
+    if (!L)
+      break;
+    change_loop_range(C, L);
+    L = L->getParentLoop();
+  }
+
+}
+
 static void outer_profile(Function *F,
                           LoopInfo *LI,
                           DominatorTree *DT,
                           // the set of stores that are in the same loop chain
                           std::vector<ReachableNodes> &stores_in_loop,
                           unsigned num_stores) {
-  // Clone the loop;
-  ValueToValueMapTy Loop_VMap;
-
-  Loop *orig_loop = get_outer_loop(LI, stores_in_loop[0].get_store()->getParent());
-  BasicBlock *ph = orig_loop->getLoopPreheader();
-  BasicBlock *h = orig_loop->getHeader();
-  BasicBlock *pp = split_pre_header(orig_loop, LI, DT);
-
-  SmallVector<BasicBlock *, 32> Blocks;
-  Loop *cloned_loop =
-      phoenix::clone_loop_with_preheader(pp, ph, orig_loop, Loop_VMap, ".c", LI, DT, Blocks);
 
   // Now, create the sampling functions
   //
@@ -463,10 +617,23 @@ static void outer_profile(Function *F,
     errs() << "slicing on: " << *value_after << "\n";
 
     slice_function(fn_sampling, value_after);
+    change_ranges(fn_sampling, value_after);
     add_counters(fn_sampling, value_before, value_after);
 
     InstToFnSamplingMap[arith] = fn_sampling;
   }
+
+  // Clone the loop;
+  ValueToValueMapTy Loop_VMap;
+
+  Loop *orig_loop = get_outer_loop(LI, stores_in_loop[0].get_store()->getParent());
+  BasicBlock *ph = orig_loop->getLoopPreheader();
+  BasicBlock *h = orig_loop->getHeader();
+  BasicBlock *pp = split_pre_header(orig_loop, LI, DT);
+
+  SmallVector<BasicBlock *, 32> Blocks;
+  Loop *cloned_loop =
+      phoenix::clone_loop_with_preheader(pp, ph, orig_loop, Loop_VMap, ".c", LI, DT, Blocks);
 
   create_controller(F, InstToFnSamplingMap, pp, orig_loop, cloned_loop);
 
@@ -489,14 +656,14 @@ void outer_profile(Function *F,
 
   if (reachables.empty())
     return;
-  
+
   // First we map stores in the same outer loop into a Map
   for (ReachableNodes &r : reachables) {
     BasicBlock *BB = r.get_store()->getParent();
     Loop *L = get_outer_loop(LI, BB);
     mapa[L].push_back(r);
   }
-  
+
   // Then, we create a copy of the outer loop alongside each sampling function
   for (auto kv : mapa) {
     DT->recalculate(*F);

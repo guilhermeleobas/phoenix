@@ -3,6 +3,7 @@
 #include "llvm/IR/Instructions.h"  // To have access to the Instructions.
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Cloning.h"
+#include "llvm/IR/DebugInfoMetadata.h"
 
 using namespace llvm;
 
@@ -67,19 +68,36 @@ Function *CloneFunction(Function *F, ValueToValueMapTy &VMap, const Twine &name)
   return NewF;
 }
 
-Function* get_printf(Module *mod){
-  Function *func_printf = mod->getFunction("printf");
-  if (!func_printf) {
-    PointerType *Pty = PointerType::get(IntegerType::get(mod->getContext(), 8), 0);
+Function* get_abs(Module *mod, Type *FT){
+  std::vector<Type*> types;
+  types.push_back(FT);
+  Function *fabs = Intrinsic::getDeclaration(mod, Intrinsic::fabs, types);
+  assert (fabs);
+  return fabs;
+}
+
+Function* get_rand(Module *mod){
+  const StringRef fname = "rand";
+  Function *func_rand = mod->getFunction(fname);
+  if (!func_rand) {
     FunctionType *FuncTy9 = FunctionType::get(IntegerType::get(mod->getContext(), 32), true);
 
-    func_printf = Function::Create(FuncTy9, GlobalValue::ExternalLinkage, "printf", mod);
-    func_printf->setCallingConv(CallingConv::C);
-
-  //   AttrListPtr func_printf_PAL;
-  //   func_printf->setAttributes(func_printf_PAL);
+    func_rand = Function::Create(FuncTy9, GlobalValue::ExternalLinkage, fname, mod);
+    func_rand->setCallingConv(CallingConv::C);
   }
-  return func_printf;
+  return func_rand;
+}
+
+Function* get_printf(Module *mod){
+  const StringRef fname = "printf";
+  Function *func = mod->getFunction(fname);
+  if (!func) {
+    PointerType *Pty = PointerType::get(IntegerType::get(mod->getContext(), 8), 0);
+    FunctionType *FuncTy9 = FunctionType::get(IntegerType::get(mod->getContext(), 32), true);
+    func = Function::Create(FuncTy9, GlobalValue::ExternalLinkage, fname, mod);
+    func->setCallingConv(CallingConv::C);
+  }
+  return func;
 }
 
 void add_dump_msg(Instruction *I, const StringRef &msg){
@@ -107,6 +125,11 @@ void add_dump_msg(Instruction *I, const StringRef &msg, Value *V) {
   Value *str = Builder.CreateGlobalStringPtr(msg);
   std::vector<Value *> int32_call_params;
   int32_call_params.push_back(str);
+
+  if (V->getType()->isFloatingPointTy()){
+    V = Builder.CreateFPExt(V, Type::getDoubleTy(I->getContext()));
+  }
+
   int32_call_params.push_back(V);
 
   Builder.CreateCall(func_printf, int32_call_params, "call_printf_dump");
@@ -118,6 +141,18 @@ void add_dump_msg(BasicBlock *BB, const StringRef &msg){
 
 void add_dump_msg(BasicBlock *BB, const StringRef &msg, Value *V){
   add_dump_msg(BB->getTerminator(), msg, V);
+}
+
+void print_instruction(Instruction *I) {
+  const DebugLoc &loc = I->getDebugLoc();
+  if (loc) {
+    auto *Scope = cast<DIScope>(loc.getScope());
+    errs() << "I: " << *I << " [" << Scope->getFilename() << ":" << loc.getLine() << "]"
+           << "\n";
+  }
+  else {
+    errs() << *I << "\n";
+  }
 }
 
 
