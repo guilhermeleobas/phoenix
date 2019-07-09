@@ -111,8 +111,6 @@ void ProgramSlicing::set_entry_block(Function *F, LoopInfo &LI, Loop *L) {
 
     assert(parent && "parent == nullptr");
 
-    errs() << "child: " << child->getName() << "\n";
-    errs() << "parent: " << parent->getName() << "\n"; 
     connect_basic_blocks(parent, child);
     child = parent;
   }
@@ -168,18 +166,23 @@ void ProgramSlicing::connect_header_to_body(Loop *L, BasicBlock *body){
   }
 }
 
-Loop *ProgramSlicing::remove_loops_outside_chain(Loop *parent, Loop *child) {
-  if (parent == nullptr){
-    return child;
-  }
-
-  for (Loop *sub : parent->getSubLoops()){
-    if (sub == child)
+// Remove all subloops except for @marked
+void ProgramSlicing::remove_subloops(Loop *L, Loop *marked){
+  for (Loop *sub : L->getSubLoops()){
+    if (sub == marked)
       continue;
 
     // connect the subloop preheader to its exit
     connect_basic_blocks(sub->getLoopPreheader(), sub->getExitBlock());
   }
+}
+
+Loop *ProgramSlicing::remove_loops_outside_chain(Loop *parent, Loop *child) {
+  if (parent == nullptr){
+    return child;
+  }
+
+  remove_subloops(parent, child);
 
   // Connect the child exit block to the parent latch block
   BasicBlock *exit = child->getExitBlock();
@@ -202,12 +205,16 @@ Loop *ProgramSlicing::remove_loops_outside_chain(LoopInfo &LI, BasicBlock *BB) {
   if (L == nullptr)
     return nullptr;
 
+  remove_subloops(L, nullptr);
+
   // connect header to body
-  connect_header_to_body(L, BB);
+  // connect_header_to_body(L, BB);
   // connect body to latch
-  connect_body_to_latch(BB, L->getLoopLatch());
+  // connect_body_to_latch(BB, L->getLoopLatch());
 
   Loop *outer = remove_loops_outside_chain(L->getParentLoop(), L);
+
+  Function *F = BB->getParent();
 
   return outer;
 }

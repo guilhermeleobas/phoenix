@@ -283,6 +283,9 @@ static void slice_function(Function *clone, Instruction *target) {
   // ensure that the sliced function will not introduce any side effect
   for (Instruction &I : instructions(*clone)) {
     assert(!isa<StoreInst>(I) && "sampling function has a store instruction");
+    for (unsigned i = 0; i < I.getNumOperands(); i++) {
+      assert(!isa<UndefValue>(I.getOperand(i)) && "operand is undef");
+    }
     // To-do: whitelist of functions without side effect (i.e. sqrt)
     /* assert(!isa<CallInst>(I) && "sampling function has a call instruction"); */
   }
@@ -324,9 +327,7 @@ static void increment_eq_counter(Function *C,
 
   Value *cmp;
 
-  errs() << "value before: " << *value_before << "\n";
-  errs() << "value after: " << *value_after << "\n";
-  if (value_after->getType()->isFloatingPointTy()){
+  if (value_after->getType()->isFloatingPointTy()) {
     // Value *sub = Builder.CreateFSub(value_before, value_after);
 
     // add_dump_msg(value_after, "sub: %.10f\n", sub);
@@ -339,8 +340,7 @@ static void increment_eq_counter(Function *C,
     // Constant *eps = ConstantFP::get(value_before->getType(), 20.0);
     // cmp = Builder.CreateFCmpOLT(value_before, eps, "fcmp");
     cmp = Builder.CreateFCmpOEQ(value_before, value_after, "fcmp");
-  }
-  else {
+  } else {
     cmp = Builder.CreateICmpEQ(value_before, value_after, "cmp");
   }
 
@@ -348,8 +348,9 @@ static void increment_eq_counter(Function *C,
   add_dump_msg(value_before, "before: %.3lf\n", value_before);
   // add_dump_msg(value_after, "op0: %.20lf\n", value_after->getOperand(0));
   // add_dump_msg(value_after, "op1: %.20lf\n", value_after->getOperand(1));
-  // add_dump_msg(value_after, "op1/op0: %.5f\n", cast<Instruction>(value_after->getOperand(1))->getOperand(0));
-  // add_dump_msg(value_after, "op1/op1: %.5f\n", cast<Instruction>(value_after->getOperand(1))->getOperand(1));
+  // add_dump_msg(value_after, "op1/op0: %.5f\n",
+  // cast<Instruction>(value_after->getOperand(1))->getOperand(0)); add_dump_msg(value_after,
+  // "op1/op1: %.5f\n", cast<Instruction>(value_after->getOperand(1))->getOperand(1));
   add_dump_msg(value_after, "after: %.3lf\n", value_after);
   add_dump_msg(value_after, "cmp: %d\n", cmp);
   // add_dump_msg(value_after, "----END----\n");
@@ -480,7 +481,7 @@ static bool getIncomingAndBackEdge(Loop *L, BasicBlock *&Incoming, BasicBlock *&
   return true;
 }
 
-static Instruction* get_predicate(BasicBlock *BB){
+static Instruction *get_predicate(BasicBlock *BB) {
   Value *term = BB->getTerminator();
   assert(isa<BranchInst>(term) && "BB TerminatorInst is not a branch inst");
   BranchInst *br = cast<BranchInst>(term);
@@ -497,7 +498,8 @@ static PHINode *getInductionVariable(Loop *L) {
   // Loop over all of the PHI nodes, looking for a canonical indvar.
   for (BasicBlock::iterator I = H->begin(); isa<PHINode>(I); ++I) {
     PHINode *PN = cast<PHINode>(I);
-    if (ConstantInt *CI = dyn_cast<ConstantInt>(PN->getIncomingValueForBlock(Incoming)))
+    Value *iv = PN->getIncomingValueForBlock(Incoming);
+    if (isa<ConstantInt>(iv) || isa<PHINode>(iv))
       if (Instruction *Inc = dyn_cast<Instruction>(PN->getIncomingValueForBlock(Backedge)))
         if ((Inc->getOpcode() == Instruction::Add && Inc->getOperand(0) == PN) ||
             (Inc->getOpcode() == Instruction::Sub && Inc->getOperand(0) == PN))
@@ -509,23 +511,26 @@ static PHINode *getInductionVariable(Loop *L) {
   return nullptr;
 }
 
-static CallInst* create_call_to_rand(Function *C, IRBuilder<> &Builder){
+static CallInst *create_call_to_rand(Function *C, IRBuilder<> &Builder) {
   Module *M = C->getParent();
   Function *rand = get_rand(M);
-  std::vector<Value*> params;
+  std::vector<Value *> params;
   return Builder.CreateCall(rand, params, "rand");
 }
 
-static void change_loop_range(Function *C, Loop *L){
-  errs() << "Loop: " << *L << "\n";
+static void change_loop_range(Function *C, Loop *L) {
+  errs() << "[INFO]: changing loop range for " << C->getName () << "\n";
   PHINode *iv = getInductionVariable(L);
   assert(iv && "iv == nullptr");
   errs() << "induction variable: " << *iv << "\n";
 
+  Type *I64Ty = IntegerType::getInt64Ty(C->getContext());
+
   Instruction *pred = get_predicate(iv->getParent());
   Value *mod = pred->getOperand(1);
-  // replace the predicate iff it is a Not equals instruction!
-  if (CmpInst *cmp = dyn_cast<CmpInst>(pred)){
+
+  // replace the predicate
+  if (CmpInst *cmp = dyn_cast<CmpInst>(pred)) {
     if (L->getParentLoop() == nullptr)
       cmp->setPredicate(CmpInst::Predicate::ICMP_NE);
     else
@@ -537,25 +542,43 @@ static void change_loop_range(Function *C, Loop *L){
   // add_dump_msg(pred, "second operand: %d\n", pred->getOperand(1));
 
   // iv = PHI [a, %BB1], [I, %BB2], ...
-  for (unsigned i = 0; i < iv->getNumOperands(); i++){
-    if (Instruction *I = dyn_cast<Instruction>(iv->getOperand(i))){
-      errs() << "I: " << *I << "\n";
-      for (int j = 0; j < I->getNumOperands(); j++){
-        if (isa<ConstantInt>(I->getOperand(j))){
-          IRBuilder<> Builder (I);
+  for (unsigned i = 0; i < iv->getNumOperands(); i++) {
+    BasicBlock *incoming = iv->getIncomingBlock(i);
+    if (incoming == L->getLoopLatch()){
+      Instruction *I = cast<Instruction>(iv->getOperand(i));
+      errs() << "Inst: " << *I << "\n";
+      // we know now that the *I is the increment instruction
+      for (int j = 0; j < I->getNumOperands(); j++) {
+        if (isa<ConstantInt>(I->getOperand(j))) {
+          IRBuilder<> Builder(I);
+
           CallInst *call = create_call_to_rand(C, Builder);
-          Value *sext = Builder.CreateSExt(call, Type::getInt64Ty(C->getContext()));
+          Value *sext = Builder.CreateSExt(call, I64Ty);
+
+          if (!mod->getType()->isIntegerTy(64))
+            mod = Builder.CreateSExt(mod, I64Ty);
           Value *rem = Builder.CreateSRem(sext, mod, "rem");
 
           I->setOperand(j, rem);
 
           // in the outermost loop, we always take the module of the final value
-          if (L->getParentLoop() == nullptr){
+          if (L->getParentLoop() == nullptr) {
             Builder.SetInsertPoint(I->getNextNode());
             Value *final_rem = Builder.CreateSRem(I, mod, "finalrem");
             // replaces the uses of I with final_rem
             I->replaceAllUsesWith(final_rem);
             cast<Instruction>(final_rem)->setOperand(0, I);
+          }
+
+
+          // Deals with the case that the size of the loop (@mod) and 
+          // the loop increment (@I) are defined in the same basic block:
+          if (Instruction *modI = dyn_cast<Instruction>(mod)){
+            BasicBlock *BB = modI->getParent();
+            if (BB == I->getParent() and
+                distance(BB, modI) > distance(BB, I)){
+              modI->moveBefore(BB->getFirstNonPHI());
+            }
           }
 
           // add_dump_msg(I, "----\n");
@@ -566,11 +589,9 @@ static void change_loop_range(Function *C, Loop *L){
           // add_dump_msg(I, "Increment value by: %d\n", rem);
           // add_dump_msg(I, "mod: %d\n", mod);
           // add_dump_msg(I, "final value: %d\n", I);
-
-
-          // I->setOperand(j == 0 ? 1 : 0, get_constantint(rem->getType(), 0));
         }
       }
+
     }
   }
 }
@@ -581,13 +602,12 @@ static void change_ranges(Function *C, Instruction *entry_point) {
 
   Loop *L = LI.getLoopFor(entry_point->getParent());
 
-  while(true){
+  while (true) {
     if (!L)
       break;
     change_loop_range(C, L);
     L = L->getParentLoop();
   }
-
 }
 
 static void outer_profile(Function *F,
@@ -596,15 +616,15 @@ static void outer_profile(Function *F,
                           // the set of stores that are in the same loop chain
                           std::vector<ReachableNodes> &stores_in_loop,
                           unsigned num_stores) {
-
   // Now, create the sampling functions
   //
   // InstToFnSamplingMap maps the arithmetic instruction to a sampling function
   std::map<Instruction *, Function *> InstToFnSamplingMap;
 
   errs() << "Function: " << F->getName() << "\n";
+
   for (ReachableNodes &rn : stores_in_loop) {
-    errs() << "store: " << *rn.get_store() << "\n";
+    errs() << "[START]: " << "store: " << *rn.get_store() << "\n";
     ValueToValueMapTy Fn_VMap;
     Function *fn_sampling = clone_function(F, Fn_VMap, "sampling");
 
@@ -621,6 +641,8 @@ static void outer_profile(Function *F,
     add_counters(fn_sampling, value_before, value_after);
 
     InstToFnSamplingMap[arith] = fn_sampling;
+
+    errs() << "[INFO]: end processing " << fn_sampling->getName() << "\n\n";
   }
 
   // Clone the loop;

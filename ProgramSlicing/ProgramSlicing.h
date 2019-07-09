@@ -14,6 +14,7 @@ class ProgramSlicing {
   void connect_body_to_latch(BasicBlock *body, BasicBlock *latch);
   void connect_header_to_body(Loop *L, BasicBlock *body);
   ///
+  void remove_subloops(Loop *L, Loop *marked);
   Loop* remove_loops_outside_chain(LoopInfo &LI, BasicBlock *BB);
   Loop* remove_loops_outside_chain(Loop *L, Loop *keep = nullptr);
 

@@ -155,5 +155,20 @@ void print_instruction(Instruction *I) {
   }
 }
 
+unsigned distance(BasicBlock *BB, Instruction *I){
+  unsigned i = 0;
+
+  for (Instruction &other : *BB){
+    if (I == &other)
+      return i;
+    
+    ++i;
+  }
+
+  std::string str = "Instruction not found on BasicBlock: ";
+  llvm::raw_string_ostream rso(str);
+  I->print(rso);
+  llvm_unreachable(str.c_str());
+}
 
 }  // namespace phoenix

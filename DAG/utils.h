@@ -28,4 +28,6 @@ void add_dump_msg(Instruction *I, const StringRef &msg, Value *V);
 
 void print_instruction(Instruction *I);
 
+unsigned distance(BasicBlock *BB, Instruction *I);
+
 };  // end namespace phoenix
