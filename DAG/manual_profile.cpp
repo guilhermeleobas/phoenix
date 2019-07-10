@@ -344,15 +344,10 @@ static void increment_eq_counter(Function *C,
     cmp = Builder.CreateICmpEQ(value_before, value_after, "cmp");
   }
 
-  add_dump_msg(value_after, "----BEGIN----\n");
-  add_dump_msg(value_before, "before: %.3lf\n", value_before);
-  // add_dump_msg(value_after, "op0: %.20lf\n", value_after->getOperand(0));
-  // add_dump_msg(value_after, "op1: %.20lf\n", value_after->getOperand(1));
-  // add_dump_msg(value_after, "op1/op0: %.5f\n",
-  // cast<Instruction>(value_after->getOperand(1))->getOperand(0)); add_dump_msg(value_after,
-  // "op1/op1: %.5f\n", cast<Instruction>(value_after->getOperand(1))->getOperand(1));
-  add_dump_msg(value_after, "after: %.3lf\n", value_after);
-  add_dump_msg(value_after, "cmp: %d\n", cmp);
+  // add_dump_msg(value_after, "----BEGIN----\n");
+  // add_dump_msg(value_before, "before: %.3lf\n", value_before);
+  // add_dump_msg(value_after, "after: %.3lf\n", value_after);
+  // add_dump_msg(value_after, "cmp: %d\n", cmp);
   // add_dump_msg(value_after, "----END----\n");
 
   Value *select = Builder.CreateSelect(cmp, one, zero);
@@ -527,7 +522,7 @@ static void change_loop_range(Function *C, Loop *L) {
   Type *I64Ty = IntegerType::getInt64Ty(C->getContext());
 
   Instruction *pred = get_predicate(iv->getParent());
-  Value *mod = pred->getOperand(1);
+  Value *array_size = pred->getOperand(1);
 
   // replace the predicate
   if (CmpInst *cmp = dyn_cast<CmpInst>(pred)) {
@@ -545,51 +540,63 @@ static void change_loop_range(Function *C, Loop *L) {
   for (unsigned i = 0; i < iv->getNumOperands(); i++) {
     BasicBlock *incoming = iv->getIncomingBlock(i);
     if (incoming == L->getLoopLatch()){
-      Instruction *I = cast<Instruction>(iv->getOperand(i));
-      errs() << "Inst: " << *I << "\n";
+      Instruction *Inc = cast<Instruction>(iv->getOperand(i));
+      errs() << "Inst: " << *Inc << "\n";
       // we know now that the *I is the increment instruction
-      for (int j = 0; j < I->getNumOperands(); j++) {
-        if (isa<ConstantInt>(I->getOperand(j))) {
-          IRBuilder<> Builder(I);
+      for (int j = 0; j < Inc->getNumOperands(); j++) {
+        if (isa<ConstantInt>(Inc->getOperand(j))) {
+          IRBuilder<> Builder(Inc);
 
           CallInst *call = create_call_to_rand(C, Builder);
           Value *sext = Builder.CreateSExt(call, I64Ty);
 
-          if (!mod->getType()->isIntegerTy(64))
-            mod = Builder.CreateSExt(mod, I64Ty);
-          Value *rem = Builder.CreateSRem(sext, mod, "rem");
+          if (!array_size->getType()->isIntegerTy(64))
+            array_size = Builder.CreateSExt(array_size, I64Ty);
+          Value *rem = Builder.CreateSRem(sext, array_size, "rem");
 
-          I->setOperand(j, rem);
+          Inc->setOperand(j, rem);
 
-          // in the outermost loop, we always take the module of the final value
+          // in the outermost loop, we always take the array_size of the final value
           if (L->getParentLoop() == nullptr) {
-            Builder.SetInsertPoint(I->getNextNode());
-            Value *final_rem = Builder.CreateSRem(I, mod, "finalrem");
+            Builder.SetInsertPoint(Inc->getNextNode());
+            Value *final_rem = Builder.CreateSRem(Inc, array_size, "finalrem");
             // replaces the uses of I with final_rem
-            I->replaceAllUsesWith(final_rem);
-            cast<Instruction>(final_rem)->setOperand(0, I);
+            Inc->replaceAllUsesWith(final_rem);
+            cast<Instruction>(final_rem)->setOperand(0, Inc);
           }
 
 
-          // Deals with the case that the size of the loop (@mod) and 
+          // Deals with the case that the size of the loop (@array_size) and 
           // the loop increment (@I) are defined in the same basic block:
-          if (Instruction *modI = dyn_cast<Instruction>(mod)){
+          if (Instruction *modI = dyn_cast<Instruction>(array_size)){
             BasicBlock *BB = modI->getParent();
-            if (BB == I->getParent() and
-                distance(BB, modI) > distance(BB, I)){
+            if (BB == Inc->getParent() and
+                distance(BB, modI) > distance(BB, Inc)){
               modI->moveBefore(BB->getFirstNonPHI());
             }
           }
 
-          // add_dump_msg(I, "----\n");
-          // add_dump_msg(I, "var name: ");
-          // add_dump_msg(I, I->getName());
-          // add_dump_msg(I, "\nvar value: %d\n", I->getOperand(j == 0 ? 1 : 0));
+          add_dump_msg(Inc, "----\n");
+          add_dump_msg(Inc, "var name: ");
+          add_dump_msg(Inc, Inc->getName());
+          add_dump_msg(Inc, "\nvar value: %d\n", Inc->getOperand(j == 0 ? 1 : 0));
 
-          // add_dump_msg(I, "Increment value by: %d\n", rem);
-          // add_dump_msg(I, "mod: %d\n", mod);
-          // add_dump_msg(I, "final value: %d\n", I);
+          add_dump_msg(Inc, "Increment value by: %d\n", rem);
+          add_dump_msg(Inc, "mod: %d\n", array_size);
+          add_dump_msg(Inc, "final value: %d\n", Inc);
         }
+      }
+
+
+      // in some cases, the increment is in the same basic block of the predicate
+      // we just add another check to prevent the increment to be greater than
+      // the array size
+      if (iv->getParent() == Inc->getParent()){
+        IRBuilder<> Builder(pred->getNextNode());
+        Value *cond = Builder.CreateICmpSLT(Inc, array_size);
+        Value *new_pred = Builder.CreateAnd(cond, pred);
+        BranchInst *br = cast<BranchInst>(iv->getParent()->getTerminator());
+        br->setCondition(new_pred);
       }
 
     }
@@ -642,7 +649,8 @@ static void outer_profile(Function *F,
 
     InstToFnSamplingMap[arith] = fn_sampling;
 
-    errs() << "[INFO]: end processing " << fn_sampling->getName() << "\n\n";
+    errs() << "[END]: " << fn_sampling->getName() << "\n\n";
+    break;
   }
 
   // Clone the loop;
