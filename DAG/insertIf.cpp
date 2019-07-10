@@ -184,12 +184,11 @@ void silent_store_elimination(Function *F, std::vector<ReachableNodes> &reachabl
 }
 
 void load_elimination(Function *F, StoreInst *store, NodeSet &s) {
-  for (auto it = s.rbegin(); it != s.rend(); it++) {
+  for (auto it = s.begin(); it != s.end(); it++) {
     phoenix::Node *node = *it;
     Value *value = node->getValue();
     Value *constant = node->getConstant();
     insert_if(store, value, constant);
-    break;
   }
 }
 
