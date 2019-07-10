@@ -31,15 +31,15 @@ using namespace llvm;
 
 namespace phoenix {
 
-static void outer_profile(Function *F,
-                          LoopInfo *LI,
-                          DominatorTree *DT,
-                          std::vector<ReachableNodes> &stores_in_loop,
-                          unsigned num_stores);
+static void inter_profilling(Function *F,
+                             LoopInfo *LI,
+                             DominatorTree *DT,
+                             std::vector<ReachableNodes> &stores_in_loop,
+                             unsigned num_stores);
 
-void outer_profile(Function *F,
-                   LoopInfo *LI,
-                   DominatorTree *DT,
-                   std::vector<ReachableNodes> &reachables);
+void inter_profilling(Function *F,
+                      LoopInfo *LI,
+                      DominatorTree *DT,
+                      std::vector<ReachableNodes> &reachables);
 
 };  // namespace phoenix

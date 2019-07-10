@@ -20,9 +20,9 @@ void move_from_prev_to_then(BasicBlock *BBPrev, BasicBlock *BBThen);
 void insert_if(StoreInst *store, Value *v, Value *constant);
 
 void insert_on_store(Function *F, std::vector<ReachableNodes> &reachables);
-void check_silent_store(Function *F, std::vector<ReachableNodes> &reachables);
+void silent_store_elimination(Function *F, std::vector<ReachableNodes> &reachables);
 
-void no_profile(Function *F, StoreInst *store, NodeSet &s);
-void no_profile(Function *F, std::vector<ReachableNodes> &reachables);
+void load_elimination(Function *F, StoreInst *store, NodeSet &s);
+void load_elimination(Function *F, std::vector<ReachableNodes> &reachables);
 
 }; // end namespace phoenix

@@ -21,6 +21,7 @@
 #include "llvm/Transforms/Utils/Cloning.h"
 
 #include <queue>
+#include <algorithm>    // std::reverse
 
 #include "../Identify/Geps.h"
 #include "NodeSet.h"
@@ -176,24 +177,26 @@ void insert_on_store(Function *F, ReachableNodes &rn) {
   insert_if(store, arith, load);
 }
 
-void check_silent_store(Function *F, std::vector<ReachableNodes> &reachables) {
+void silent_store_elimination(Function *F, std::vector<ReachableNodes> &reachables) {
   for (ReachableNodes &rn : reachables) {
     insert_on_store(F, rn);
   }
 }
 
-void no_profile(Function *F, StoreInst *store, NodeSet &s) {
-  for (auto *node : s) {
+void load_elimination(Function *F, StoreInst *store, NodeSet &s) {
+  for (auto it = s.rbegin(); it != s.rend(); it++) {
+    phoenix::Node *node = *it;
     Value *value = node->getValue();
     Value *constant = node->getConstant();
     insert_if(store, value, constant);
+    break;
   }
 }
 
-void no_profile(Function *F, std::vector<ReachableNodes> &reachables) {
+void load_elimination(Function *F, std::vector<ReachableNodes> &reachables) {
   for (ReachableNodes &r : reachables) {
     NodeSet nodes = r.get_nodeset();
-    no_profile(F, r.get_store(), nodes);
+    load_elimination(F, r.get_store(), nodes);
   }
 }
 

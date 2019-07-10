@@ -514,7 +514,7 @@ static CallInst *create_call_to_rand(Function *C, IRBuilder<> &Builder) {
 }
 
 static void change_loop_range(Function *C, Loop *L) {
-  errs() << "[INFO]: changing loop range for " << C->getName () << "\n";
+  errs() << "[INFO]: changing loop range for " << C->getName() << "\n";
   PHINode *iv = getInductionVariable(L);
   assert(iv && "iv == nullptr");
   errs() << "induction variable: " << *iv << "\n";
@@ -539,7 +539,7 @@ static void change_loop_range(Function *C, Loop *L) {
   // iv = PHI [a, %BB1], [I, %BB2], ...
   for (unsigned i = 0; i < iv->getNumOperands(); i++) {
     BasicBlock *incoming = iv->getIncomingBlock(i);
-    if (incoming == L->getLoopLatch()){
+    if (incoming == L->getLoopLatch()) {
       Instruction *Inc = cast<Instruction>(iv->getOperand(i));
       errs() << "Inst: " << *Inc << "\n";
       // we know now that the *I is the increment instruction
@@ -565,13 +565,11 @@ static void change_loop_range(Function *C, Loop *L) {
             cast<Instruction>(final_rem)->setOperand(0, Inc);
           }
 
-
-          // Deals with the case that the size of the loop (@array_size) and 
+          // Deals with the case that the size of the loop (@array_size) and
           // the loop increment (@I) are defined in the same basic block:
-          if (Instruction *modI = dyn_cast<Instruction>(array_size)){
+          if (Instruction *modI = dyn_cast<Instruction>(array_size)) {
             BasicBlock *BB = modI->getParent();
-            if (BB == Inc->getParent() and
-                distance(BB, modI) > distance(BB, Inc)){
+            if (BB == Inc->getParent() and distance(BB, modI) > distance(BB, Inc)) {
               modI->moveBefore(BB->getFirstNonPHI());
             }
           }
@@ -587,18 +585,16 @@ static void change_loop_range(Function *C, Loop *L) {
         }
       }
 
-
       // in some cases, the increment is in the same basic block of the predicate
       // we just add another check to prevent the increment to be greater than
       // the array size
-      if (iv->getParent() == Inc->getParent()){
+      if (iv->getParent() == Inc->getParent()) {
         IRBuilder<> Builder(pred->getNextNode());
         Value *cond = Builder.CreateICmpSLT(Inc, array_size);
         Value *new_pred = Builder.CreateAnd(cond, pred);
         BranchInst *br = cast<BranchInst>(iv->getParent()->getTerminator());
         br->setCondition(new_pred);
       }
-
     }
   }
 }
@@ -617,12 +613,12 @@ static void change_ranges(Function *C, Instruction *entry_point) {
   }
 }
 
-static void outer_profile(Function *F,
-                          LoopInfo *LI,
-                          DominatorTree *DT,
-                          // the set of stores that are in the same loop chain
-                          std::vector<ReachableNodes> &stores_in_loop,
-                          unsigned num_stores) {
+static void inter_profilling(Function *F,
+                             LoopInfo *LI,
+                             DominatorTree *DT,
+                             // the set of stores that are in the same loop chain
+                             std::vector<ReachableNodes> &stores_in_loop,
+                             unsigned num_stores) {
   // Now, create the sampling functions
   //
   // InstToFnSamplingMap maps the arithmetic instruction to a sampling function
@@ -631,7 +627,8 @@ static void outer_profile(Function *F,
   errs() << "Function: " << F->getName() << "\n";
 
   for (ReachableNodes &rn : stores_in_loop) {
-    errs() << "[START]: " << "store: " << *rn.get_store() << "\n";
+    errs() << "[START]: "
+           << "store: " << *rn.get_store() << "\n";
     ValueToValueMapTy Fn_VMap;
     Function *fn_sampling = clone_function(F, Fn_VMap, "sampling");
 
@@ -677,10 +674,10 @@ static void outer_profile(Function *F,
   }
 }
 
-void outer_profile(Function *F,
-                   LoopInfo *LI,
-                   DominatorTree *DT,
-                   std::vector<ReachableNodes> &reachables) {
+void inter_profilling(Function *F,
+                      LoopInfo *LI,
+                      DominatorTree *DT,
+                      std::vector<ReachableNodes> &reachables) {
   std::map<Loop *, std::vector<ReachableNodes>> mapa;
 
   if (reachables.empty())
@@ -696,7 +693,7 @@ void outer_profile(Function *F,
   // Then, we create a copy of the outer loop alongside each sampling function
   for (auto kv : mapa) {
     DT->recalculate(*F);
-    outer_profile(F, LI, DT, kv.second, kv.second.size());
+    inter_profilling(F, LI, DT, kv.second, kv.second.size());
   }
 
   // F->viewCFG();

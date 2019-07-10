@@ -310,7 +310,7 @@ void create_phi_nodes(Function *F,
 }
 
 //
-void inner_profile(Function *F, ReachableNodes &rn) {
+void intra_profilling(Function *F, ReachableNodes &rn) {
   // load = LoadInst *ptr
   // arith = op @load @other_inst
   // store @arith, *ptr
@@ -344,14 +344,14 @@ void inner_profile(Function *F, ReachableNodes &rn) {
   create_BBControl(F, BBProfile, switch_control_ptr, c1, c2);
 }
 
-void inner_profile(Function *F, std::vector<ReachableNodes> &reachables) {
+void intra_profilling(Function *F, std::vector<ReachableNodes> &reachables) {
   if (reachables.empty())
     return;
 
   for (ReachableNodes &rn : reachables) {
     NodeSet nodes = rn.get_nodeset();
     if (nodes.size())
-      inner_profile(F, rn);
+      intra_profilling(F, rn);
   }
 }
 
