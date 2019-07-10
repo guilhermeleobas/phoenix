@@ -650,7 +650,6 @@ static void outer_profile(Function *F,
     InstToFnSamplingMap[arith] = fn_sampling;
 
     errs() << "[END]: " << fn_sampling->getName() << "\n\n";
-    break;
   }
 
   // Clone the loop;
