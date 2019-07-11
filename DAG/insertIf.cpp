@@ -189,6 +189,7 @@ void load_elimination(Function *F, StoreInst *store, NodeSet &s) {
     Value *value = node->getValue();
     Value *constant = node->getConstant();
     insert_if(store, value, constant);
+    break;
   }
 }
 

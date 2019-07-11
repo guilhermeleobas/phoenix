@@ -9,6 +9,7 @@
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Transforms/Utils/LoopUtils.h"
+#include "llvm/Transforms/Scalar/SimplifyCFG.h"
 
 #include <iterator>
 #include <queue>
@@ -255,6 +256,9 @@ void ProgramSlicing::slice(Function *F, Instruction *I) {
   DCEPass d;
   d.run(*F, FAM);
 
+  SimplifyCFGPass sf;
+  sf.run(*F, FAM);
+
   ProgramDependenceGraph PDG;
   PDG.compute_dependences(F);
   std::set<Instruction*> dependences = PDG.get_dependences_for(I);
@@ -265,6 +269,7 @@ void ProgramSlicing::slice(Function *F, Instruction *I) {
       continue;
 
     I.dropAllReferences();
+    I.replaceAllUsesWith(UndefValue::get(I.getType()));
     q.push(&I);
     // I.eraseFromParent();
   }
@@ -275,7 +280,6 @@ void ProgramSlicing::slice(Function *F, Instruction *I) {
     I->eraseFromParent();
   }
 
-  // F->viewCFG();
 }
 
 }  // namespace phoenix
