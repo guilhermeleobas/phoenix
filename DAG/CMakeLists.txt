@@ -17,7 +17,7 @@ add_llvm_loadable_module(DAG
   utils.cpp
   node.cpp
   insertIf.cpp
-  manual_profile.cpp
+  inter_profile.cpp
   parser.cpp
   )
 

@@ -24,7 +24,7 @@
 #include <queue>
 
 #include "../ProgramSlicing/ProgramSlicing.h"
-#include "manual_profile.h"
+#include "inter_profile.h"
 #include "utils.h"
 
 using namespace llvm;

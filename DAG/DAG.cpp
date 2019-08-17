@@ -26,11 +26,11 @@
 
 #include "DAG.h"
 #include "ReachableNodes.h"
-#include "auto_profile.h"
+#include "intra_profile.h"
 #include "depthVisitor.h"
 #include "dotVisitor.h"
 #include "insertIf.h"
-#include "manual_profile.h"
+#include "inter_profile.h"
 #include "propagateAnalysisVisitor.h"
 
 #define DEBUG_TYPE "DAG"
