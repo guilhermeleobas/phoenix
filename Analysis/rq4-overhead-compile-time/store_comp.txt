@@ -1,0 +1,100 @@
+time_lnk:  1565671528.333900589
+time.opt.1:  1565671528.429050864
+time.opt.2:  1565671528.470045758
+time.opt.3:  1565671528.782025865
+timeout --signal=TERM 0 ./INS_correlation.exe   < /dev/null &> /dev/null
+time_lnk:  1565671529.915893369
+time.opt.1:  1565671529.994693795
+time.opt.2:  1565671530.033015626
+time.opt.3:  1565671530.327455511
+timeout --signal=TERM 0 ./INS_covariance.exe   < /dev/null &> /dev/null
+time_lnk:  1565671531.463754044
+time.opt.1:  1565671531.553222515
+time.opt.2:  1565671531.589860890
+time.opt.3:  1565671531.877077924
+timeout --signal=TERM 0 ./INS_gemm.exe   < /dev/null &> /dev/null
+time_lnk:  1565671533.033513458
+time.opt.1:  1565671533.125292216
+time.opt.2:  1565671533.164472725
+time.opt.3:  1565671533.481724319
+timeout --signal=TERM 0 ./INS_gemver.exe   < /dev/null &> /dev/null
+time_lnk:  1565671534.655378473
+time.opt.1:  1565671534.728431012
+time.opt.2:  1565671534.763962492
+time.opt.3:  1565671534.989654543
+timeout --signal=TERM 0 ./INS_gesummv.exe   < /dev/null &> /dev/null
+time_lnk:  1565671536.094245572
+time.opt.1:  1565671536.185635557
+time.opt.2:  1565671536.223680622
+time.opt.3:  1565671536.555005239
+timeout --signal=TERM 0 ./INS_symm.exe   < /dev/null &> /dev/null
+time_lnk:  1565671537.745208225
+time.opt.1:  1565671537.828594582
+time.opt.2:  1565671537.864284370
+time.opt.3:  1565671538.125309273
+timeout --signal=TERM 0 ./INS_syrk.exe   < /dev/null &> /dev/null
+time_lnk:  1565671539.226146387
+time.opt.1:  1565671539.305575024
+time.opt.2:  1565671539.340149286
+time.opt.3:  1565671539.605317498
+timeout --signal=TERM 0 ./INS_trmm.exe   < /dev/null &> /dev/null
+time_lnk:  1565671540.751708052
+time.opt.1:  1565671540.861058038
+time.opt.2:  1565671540.902250874
+time.opt.3:  1565671541.207980342
+timeout --signal=TERM 0 ./INS_2mm.exe   < /dev/null &> /dev/null
+time_lnk:  1565671542.381301564
+time.opt.1:  1565671542.501805409
+time.opt.2:  1565671542.542866488
+time.opt.3:  1565671542.875515054
+timeout --signal=TERM 0 ./INS_3mm.exe   < /dev/null &> /dev/null
+time_lnk:  1565671544.034087165
+time.opt.1:  1565671544.105124832
+time.opt.2:  1565671544.139669617
+time.opt.3:  1565671544.374192008
+timeout --signal=TERM 0 ./INS_atax.exe   < /dev/null &> /dev/null
+time_lnk:  1565671545.453227673
+time.opt.1:  1565671545.528523750
+time.opt.2:  1565671545.564657031
+time.opt.3:  1565671545.807827180
+timeout --signal=TERM 0 ./INS_bicg.exe   < /dev/null &> /dev/null
+time_lnk:  1565671546.892871646
+time.opt.1:  1565671546.987172569
+time.opt.2:  1565671547.026149056
+time.opt.3:  1565671547.394526818
+timeout --signal=TERM 0 ./INS_doitgen.exe   < /dev/null &> /dev/null
+time_lnk:  1565671548.612342984
+time.opt.1:  1565671548.690009470
+time.opt.2:  1565671548.726183935
+time.opt.3:  1565671548.976907024
+timeout --signal=TERM 0 ./INS_mvt.exe   < /dev/null &> /dev/null
+time_lnk:  1565671550.096490907
+time.opt.1:  1565671550.202130893
+time.opt.2:  1565671550.241663513
+time.opt.3:  1565671550.610665383
+timeout --signal=TERM 0 ./INS_cholesky.exe   < /dev/null &> /dev/null
+time_lnk:  1565671551.806206771
+time.opt.1:  1565671551.911792418
+time.opt.2:  1565671551.951478943
+time.opt.3:  1565671552.260913856
+timeout --signal=TERM 0 ./INS_gramschmidt.exe   < /dev/null &> /dev/null
+time_lnk:  1565671553.414885210
+time.opt.1:  1565671553.518292742
+time.opt.2:  1565671553.558714901
+time.opt.3:  1565671553.937282681
+timeout --signal=TERM 0 ./INS_lu.exe   < /dev/null &> /dev/null
+time_lnk:  1565671555.137625400
+time.opt.1:  1565671555.266335403
+time.opt.2:  1565671555.307674916
+time.opt.3:  1565671555.746115405
+timeout --signal=TERM 0 ./INS_ludcmp.exe   < /dev/null &> /dev/null
+time_lnk:  1565671556.957528410
+time.opt.1:  1565671557.026888679
+time.opt.2:  1565671557.063962867
+time.opt.3:  1565671557.303469177
+timeout --signal=TERM 0 ./INS_trisolv.exe   < /dev/null &> /dev/null
+time_lnk:  1565671558.427450274
+time.opt.1:  1565671558.547001387
+time.opt.2:  1565671558.589831273
+time.opt.3:  1565671559.016729614
+timeout --signal=TERM 0 ./INS_fdtd-2d.exe   < /dev/null &> /dev/null

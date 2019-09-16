@@ -31,7 +31,7 @@ Value* convert(Value *v, Value *target){
   }
 }
 
-Value* getDestructor(Instruction *I){
+Value* getAbsorbing(Instruction *I){
   switch (I->getOpcode()) {
   case Instruction::Mul:
   case Instruction::UDiv:
@@ -41,10 +41,11 @@ Value* getDestructor(Instruction *I){
   case Instruction::FMul:
   case Instruction::FDiv:
     return ConstantFP::get(I->getType(), 0.0);
+  case Instruction::Or:
+    return ConstantInt::get(I->getType(), 0xFFFFFFFF);
   case Instruction::Shl:
   case Instruction::LShr:
   case Instruction::AShr:
-  case Instruction::Or:
   case Instruction::Xor:
     return nullptr;
 
@@ -83,6 +84,8 @@ Value* getIdentity(Instruction *I, const Geps *g) {
     return ConstantFP::get(I->getType(), 1.0);
 
   case Instruction::And:
+    // !0 is the identity of and 
+    // and !0 is the absorbing element of OR
     return g->get_p_before();
   default:
     std::string str = "Instruction not supported: ";
@@ -113,7 +116,7 @@ class propagateAnalysisVisitor : public Visitor {
     // for a given unary instruction
     // one propagates the `id` iff the destructor
     // of the operand(unary) == id
-    Value *des = getDestructor(unary->getInst());
+    Value *des = getAbsorbing(unary->getInst());
 
     if (des == id){
       unary->setConstant(id);
@@ -138,7 +141,7 @@ class propagateAnalysisVisitor : public Visitor {
 
     // The same is valid here! One only propagates `id` iff
     // id == destructor(binary_op);
-    Value *des = getDestructor(binary->getInst());
+    Value *des = getAbsorbing(binary->getInst());
 
     if (des == id){
       binary->setConstant(id);
