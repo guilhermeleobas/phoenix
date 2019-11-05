@@ -374,12 +374,12 @@ static void change_return(Function *C, Instruction *eq_ptr, Instruction *cnt_ptr
       // therefore we return 1
       Value *sub = Builder.CreateSub(cnt, eq, "sub");
 
-      add_dump_msg(&BB, "function: ");
-      add_dump_msg(&BB, C->getName());
-      add_dump_msg(&BB, "\n");
-      add_dump_msg(&BB, "cnt value: %d\n", cnt);
-      add_dump_msg(&BB, "eq value: %d\n", eq);
-      add_dump_msg(&BB, "sub value: %d\n", sub);
+      // add_dump_msg(&BB, "function: ");
+      // add_dump_msg(&BB, C->getName());
+      // add_dump_msg(&BB, "\n");
+      // add_dump_msg(&BB, "cnt value: %d\n", cnt);
+      // add_dump_msg(&BB, "eq value: %d\n", eq);
+      // add_dump_msg(&BB, "sub value: %d\n", sub);
 
       Value *cmp = Builder.CreateICmpSLE(sub, treshold, "cmp");
       Value *ret = Builder.CreateSelect(cmp, one, zero);
