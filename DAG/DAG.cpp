@@ -46,10 +46,10 @@ cl::opt<OptType> DagInstrumentation(
     "dag-opt",
     cl::desc("Type of instrumentation"),
     cl::init(OptType::StoreElimination),
-    cl::values(clEnumValN(OptType::LoadElimination, "load", "no profilling at all"),
-               clEnumValN(OptType::IntraProfilling, "intra", "Inner loop profile"),
-               clEnumValN(OptType::StoreElimination, "store", "just check if the store is silent"),
-               clEnumValN(OptType::InterProfilling, "inter", "Outer loop profiler!")));
+    cl::values(clEnumValN(OptType::LoadElimination, "eae", "no profilling at all"),
+               clEnumValN(OptType::IntraProfilling, "alp", "Inner loop profile"),
+               clEnumValN(OptType::StoreElimination, "sse", "just check if the store is silent"),
+               clEnumValN(OptType::InterProfilling, "plp", "Outer loop profiler!")));
 
 // This should implement a cost model
 // Right now we only insert the `if` if the depth is >= threshold(1)

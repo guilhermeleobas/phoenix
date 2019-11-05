@@ -574,14 +574,14 @@ static void change_loop_range(Function *C, Loop *L) {
             }
           }
 
-          add_dump_msg(Inc, "----\n");
-          add_dump_msg(Inc, "var name: ");
-          add_dump_msg(Inc, Inc->getName());
-          add_dump_msg(Inc, "\nvar value: %d\n", Inc->getOperand(j == 0 ? 1 : 0));
+          // add_dump_msg(Inc, "----\n");
+          // add_dump_msg(Inc, "var name: ");
+          // add_dump_msg(Inc, Inc->getName());
+          // add_dump_msg(Inc, "\nvar value: %d\n", Inc->getOperand(j == 0 ? 1 : 0));
 
-          add_dump_msg(Inc, "Increment value by: %d\n", rem);
-          add_dump_msg(Inc, "mod: %d\n", array_size);
-          add_dump_msg(Inc, "final value: %d\n", Inc);
+          // add_dump_msg(Inc, "Increment value by: %d\n", rem);
+          // add_dump_msg(Inc, "mod: %d\n", array_size);
+          // add_dump_msg(Inc, "final value: %d\n", Inc);
         }
       }
 
