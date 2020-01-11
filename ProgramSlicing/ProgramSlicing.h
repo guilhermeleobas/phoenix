@@ -9,7 +9,7 @@ class ProgramSlicing {
  private:
 
   void set_entry_block(Function *F, LoopInfo &LI, Loop *L);
-  void set_exit_block(Function *F, Loop *L);
+  void set_exit_block(Function *F);
   void connect_basic_blocks(BasicBlock *to, BasicBlock *from);
   void connect_body_to_latch(BasicBlock *body, BasicBlock *latch);
   void connect_header_to_body(Loop *L, BasicBlock *body);

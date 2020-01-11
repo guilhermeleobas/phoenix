@@ -44,6 +44,12 @@ struct DependenceNode{
     return cast<Instruction>(node)->getParent();
   }
 
+  unsigned getId() { return id; }
+
+  bool operator==(const Value *V) const {
+    return V == node;
+  }
+
   friend llvm::raw_ostream& operator<<(llvm::raw_ostream& os, DependenceNode &dn){
     // os << dn.id;
     os << *dn.node;

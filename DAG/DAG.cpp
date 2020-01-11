@@ -48,7 +48,7 @@ cl::opt<OptType> DagInstrumentation(
     cl::init(OptType::StoreElimination),
     cl::values(clEnumValN(OptType::LoadElimination, "eae", "no profilling at all"),
                clEnumValN(OptType::IntraProfilling, "alp", "Inner loop profile"),
-               clEnumValN(OptType::StoreElimination, "sse", "just check if the store is silent"),
+               clEnumValN(OptType::StoreElimination, "ess", "just check if the store is silent"),
                clEnumValN(OptType::InterProfilling, "plp", "Outer loop profiler!")));
 
 // This should implement a cost model

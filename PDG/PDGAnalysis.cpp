@@ -50,7 +50,8 @@ Value *ProgramDependenceGraph::get_predicate(PostDominatorTree *PDT,
   if (br->isUnconditional() || PDT->properlyDominates(Y, X))
     return old_pred;
 
-  return br->getCondition();
+  // return br->getCondition();
+  return br;
 }
 
 // Create control dependence edges from each y \in Y to the predicate *pred

@@ -2,6 +2,7 @@
 
 #include "../PDG/PDGAnalysis.h"
 #include "llvm/Analysis/LoopInfo.h"
+#include "llvm/IR/Verifier.h"
 
 #include "llvm/CodeGen/UnreachableBlockElim.h"
 #include "llvm/Passes/PassBuilder.h"
@@ -118,21 +119,77 @@ void ProgramSlicing::set_entry_block(Function *F, LoopInfo &LI, Loop *L) {
 
 }
 
-void ProgramSlicing::set_exit_block(Function *F, Loop *L) {
-  BasicBlock *L_exit = L->getExitBlock();
-  assert (L_exit != nullptr && "L_exit is nullptr");
-  BasicBlock *exit = BasicBlock::Create(F->getContext(), "function_exit", F, L_exit);
+// bool ProgramSlicing::set_exit_block(Function *F, Loop *L) {
+//   SmallVector<BasicBlock*, 10> ExitBlocks;
+//   //BasicBlock *L_exit = L->getExitBlock();
+//   BasicBlock *L_exit = nullptr;
+//   L->getExitBlocks(ExitBlocks);
+
+//   for (BasicBlock *BB : ExitBlocks) {
+
+//     Instruction *branch = BB->getTerminator();
+//     BasicBlock *L_exit_tmp = nullptr;
+
+//     branch->dump();
+
+//     if (BranchInst *BI = dyn_cast<BranchInst>(branch))
+//       if (!BI->isUnconditional())
+//         return false;
+
+//     if (BranchInst *BI = dyn_cast<BranchInst>(branch))
+//       L_exit_tmp = BI->getSuccessor(0);
+//     else{
+//       L_exit_tmp = BB;
+//     }
+      
+//     if (L_exit == nullptr)
+//       L_exit = L_exit_tmp;
+//     // Invalidate whenever it is not the same Target Basic Block
+//     if (L_exit != L_exit_tmp){
+//       errs() << "3\n";
+//       return false;
+//     }
+
+//   }
+//   assert (L_exit != nullptr && "L_exit is nullptr");
+//   BasicBlock *exit = BasicBlock::Create(F->getContext(), "function_exit", F, L_exit);
+//   IRBuilder<> Builder(exit);
+//   Builder.CreateRetVoid();
+//   Instruction *branch = L_exit->getTerminator();
+
+//   // We do not need to create a return inst, if it is the terminator.
+//   if (ReturnInst *RI = dyn_cast<ReturnInst>(branch))
+//     return true;
+
+//   Builder.SetInsertPoint(branch);
+//   Builder.CreateBr(exit);
+//   branch->dropAllReferences();
+//   branch->eraseFromParent();
+
+//   return true;
+// }
+
+void ProgramSlicing::set_exit_block(Function *F) {
+  BasicBlock *F_exit = nullptr;
+
+  for (BasicBlock &BB : *F){
+    if (isa<ReturnInst>(BB.getTerminator()))
+      F_exit = &BB;
+  }
+
+  assert (F_exit != nullptr && "F_exit is nullptr");
+  BasicBlock *exit = BasicBlock::Create(F->getContext(), "function_exit", F, F_exit);
 
   IRBuilder<> Builder(exit);
   Builder.CreateRetVoid();
 
-  Instruction *branch = L_exit->getTerminator();
+  Instruction *ret = F_exit->getTerminator();
 
-  Builder.SetInsertPoint(branch);
+  Builder.SetInsertPoint(ret);
   Builder.CreateBr(exit);
 
-  branch->dropAllReferences();
-  branch->eraseFromParent();
+  ret->dropAllReferences();
+  ret->eraseFromParent();
 }
 
 void ProgramSlicing::connect_basic_blocks(BasicBlock *to, BasicBlock *from){
@@ -230,6 +287,251 @@ unsigned get_num_users(Instruction *I) {
   return nUsers;
 }
 
+std::set<BasicBlock*> compute_alive_blocks(Function *F, std::set<Instruction*> &dependences){
+  std::set<BasicBlock*> alive;
+
+  for (auto &BB : *F){
+    for (Instruction &I : BB){
+      if (dependences.find(&I) != dependences.end()){
+        alive.insert(&BB);
+        break;
+      }
+    }
+  }
+
+  return alive;
+}
+
+unsigned num_pred(BasicBlock *BB){
+  unsigned i = 0;
+  for (auto it = pred_begin(BB); it != pred_end(BB); ++it)
+    ++i;
+  return i;
+}
+
+unsigned num_succ(BasicBlock *BB){
+  unsigned i = 0;
+  for (auto it = succ_begin(BB); it != succ_end(BB); ++it)
+    ++i;
+  return i;
+}
+
+void connect_indirect_jump(BasicBlock *pred, BasicBlock *succ){
+  BranchInst *term = cast<BranchInst>(pred->getTerminator());
+  assert(term->getNumSuccessors() == 1);
+  term->setSuccessor(0, succ);
+}
+
+// Pred contains a conditional jump
+void connect_cond_jump(BasicBlock *pred, BasicBlock *BB, BasicBlock *succ){
+  BranchInst *term = cast<BranchInst>(pred->getTerminator());
+  for (unsigned i = 0; i < term->getNumSuccessors(); i++){
+    if (term->getSuccessor(i) == BB){
+      term->setSuccessor(i, succ);
+      return;
+    }
+  }
+}
+
+void connect_pred_to_succ(BasicBlock *pred, BasicBlock *BB, BasicBlock *succ){
+  /*
+    @pred -> @BB -> @succ
+  */
+  // errs() << "Connecting: " << pred->getName() << " to " << succ->getName() << "\n";
+  if (num_succ(pred) == 1)
+    connect_indirect_jump(pred, succ);
+  else
+    connect_cond_jump(pred, BB, succ);
+
+}
+
+bool conditional_to_direct(BasicBlock *BB){
+  /*
+    If BB contains a instruction of the form:
+     br T %val, label %BB, label %succ 
+    We replace it by a direct jump:
+     br label %succ 
+  */
+
+  if (!isa<BranchInst>(BB->getTerminator()))
+    return false;
+
+  BranchInst *term = cast<BranchInst>(BB->getTerminator());
+
+  if (term->isUnconditional())
+    return false;
+
+  BasicBlock *succ = nullptr;
+
+  if (term->getSuccessor(0) == BB)
+    succ = term->getSuccessor(1);
+  else if (term->getSuccessor(1) == BB)
+    succ = term->getSuccessor(0);
+
+  if (succ == nullptr)
+    return false;
+
+  BranchInst *rep = BranchInst::Create(succ, term);
+  term->dropAllReferences();
+  term->eraseFromParent();
+  return true;
+}
+
+bool fix_conditional_jump_to_same_block(BasicBlock *BB){
+  /*
+    If BB contains a instruction of the form:
+     br T %val, label %succ, label %succ 
+    We replace it by a direct jump:
+     br label %succ 
+  */
+
+  if (!isa<BranchInst>(BB->getTerminator()))
+    return false;
+
+  BranchInst *term = cast<BranchInst>(BB->getTerminator());
+
+  if (term->isUnconditional())
+    return false;
+
+  if (term->getSuccessor(0) == term->getSuccessor(1)){
+    BranchInst *rep = BranchInst::Create(term->getSuccessor(0), term);
+    term->dropAllReferences();
+    term->eraseFromParent();
+  }
+
+  return true;
+}
+
+bool remove_successor(BasicBlock *BB, BasicBlock *succ){
+  if (!isa<BranchInst>(BB->getTerminator()))
+    return false;
+
+  BranchInst *term = cast<BranchInst>(BB->getTerminator());
+
+  if (term->isUnconditional()){
+    connect_indirect_jump(BB, BB);
+  }
+  else {
+    unsigned idx = (term->getSuccessor(0) == succ) ? 1 : 0;
+    BasicBlock *other = term->getSuccessor(idx);
+    term->setSuccessor((idx+1)%2, other);
+    fix_conditional_jump_to_same_block(BB);
+  }
+
+  return true;
+}
+
+void fix_phi_nodes(BasicBlock *prev, BasicBlock *BB, BasicBlock *succ) {
+
+  auto *Old = BB;
+  auto *New = prev;
+  for (PHINode &phi : succ->phis()){
+    for (unsigned Op = 0, NumOps = phi.getNumOperands(); Op != NumOps; ++Op)
+      if (phi.getIncomingBlock(Op) == Old)
+        phi.setIncomingBlock(Op, New);
+  }
+
+}
+
+std::vector<BasicBlock*> collect_predecessors(BasicBlock *BB){
+  std::vector<BasicBlock*> v;
+  for (BasicBlock *pred : predecessors(BB)){
+    v.push_back(pred);
+  } 
+  return v;
+}
+
+void delete_block(BasicBlock *BB){
+  /*
+    1. If the block has a single predecessor/successor, connect them
+  */
+
+  // errs() << "deleting block: " << BB->getName() << "\n\n";
+
+  conditional_to_direct(BB);
+  fix_conditional_jump_to_same_block(BB);
+
+  if (num_succ(BB) == 0){
+    // BB->getParent()->viewCFG();
+    auto preds = collect_predecessors(BB);
+    for (auto *pred : preds){
+      remove_successor(pred, BB);
+    }
+    // BB->getParent()->viewCFG();
+  }
+  else if (num_pred(BB) == 1 and num_succ(BB) == 1){
+    auto *pred = BB->getSinglePredecessor();
+    auto *succ = BB->getSingleSuccessor();
+    connect_pred_to_succ(pred, BB, succ);
+    fix_phi_nodes(pred, BB, succ);
+  } 
+  else if (num_pred(BB) > 1 and num_succ(BB) == 1){
+    auto preds = collect_predecessors(BB);
+
+    for (BasicBlock *pred : preds){
+      auto *succ = BB->getSingleSuccessor();
+      connect_pred_to_succ(pred, BB, succ);
+      fix_phi_nodes(pred, BB, succ);
+    }
+  }
+
+  // connect_indirect_jump(BB, BB);
+
+  auto *term = BB->getTerminator();
+  term->dropAllReferences();
+  term->eraseFromParent();
+  BB->dropAllReferences();
+  BB->eraseFromParent();
+}
+
+std::vector<BasicBlock*> get_dead_blocks(Function *F, std::set<BasicBlock*> &alive_blocks){
+  df_iterator_default_set<BasicBlock *> Reachable;
+  std::vector<BasicBlock*> d;
+
+  for (BasicBlock *BB : depth_first_ext(F, Reachable)){
+    if (alive_blocks.find(BB) == alive_blocks.end()){
+      d.push_back(BB);
+    }
+  }
+
+  std::reverse(d.begin(), d.end());
+
+  return d;
+}
+
+bool can_delete_block(Function *F, BasicBlock *BB){
+  // if (&F->getEntryBlock() == BB)
+  if (&F->getEntryBlock() == BB || isa<ReturnInst>(BB->getTerminator()))
+    return false;
+  return true;
+}
+
+void delete_blocks(Function *F, std::set<BasicBlock*> &alive_blocks){
+  auto dead_blocks = get_dead_blocks(F, alive_blocks);
+
+  for (auto *BB : dead_blocks){
+    if (can_delete_block(F, BB))
+      delete_block(BB);
+  }
+}
+
+void delete_empty_blocks(Function *F){
+  std::queue<BasicBlock*> q;
+  for (auto &BB : *F){
+    if (BB.empty()){
+      assert(num_pred(&BB) == 1 && "Basic Block has more than one predecessor here!");
+      remove_successor(BB.getSinglePredecessor(), &BB);
+      q.push(&BB);
+    }
+  }
+
+  while (!q.empty()){
+    auto *BB = q.front();
+    BB->eraseFromParent();
+    q.pop();
+  }
+}
+
 void ProgramSlicing::slice(Function *F, Instruction *I) {
   errs() << "[INFO]: Applying slicing on: " << F->getName() << "\n";
 
@@ -238,13 +540,7 @@ void ProgramSlicing::slice(Function *F, Instruction *I) {
   PDT.recalculate(*F);
   LoopInfo LI(DT);
 
-  Loop *L = remove_loops_outside_chain(LI, I->getParent());
-  assert (L != nullptr && "Loop is null!");
-
-  set_entry_block(F, LI, L);
-  set_exit_block(F, L);
-
-  EliminateUnreachableBlocks(*F);
+  set_exit_block(F);
 
   PassBuilder PB;
   FunctionAnalysisManager FAM;
@@ -262,6 +558,9 @@ void ProgramSlicing::slice(Function *F, Instruction *I) {
   ProgramDependenceGraph PDG;
   PDG.compute_dependences(F);
   std::set<Instruction*> dependences = PDG.get_dependences_for(I);
+  // PDG.get_dependence_graph()->to_dot();
+
+  std::set<BasicBlock*> alive_blocks = compute_alive_blocks(F, dependences);
 
   std::queue<Instruction *> q;
   for (Instruction &I : instructions(F)) {
@@ -271,7 +570,6 @@ void ProgramSlicing::slice(Function *F, Instruction *I) {
     I.dropAllReferences();
     I.replaceAllUsesWith(UndefValue::get(I.getType()));
     q.push(&I);
-    // I.eraseFromParent();
   }
 
   while (!q.empty()) {
@@ -280,6 +578,25 @@ void ProgramSlicing::slice(Function *F, Instruction *I) {
     I->eraseFromParent();
   }
 
+  delete_empty_blocks(F);
+
+  u.run(*F, FAM);
+  sf.run(*F, FAM);
+
+  delete_blocks(F, alive_blocks);
+
+  u.run(*F, FAM);
+  sf.run(*F, FAM);
+  // F->viewCFG();
+  // VerifierPass ver;
+  // ver.run(*F, FAM);
+
+  // EliminateUnreachableBlocks(*F);
+
+  // u.run(*F, FAM);
+  // d.run(*F, FAM);
+
+  // assert(0);
 }
 
 }  // namespace phoenix

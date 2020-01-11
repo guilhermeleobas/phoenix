@@ -108,8 +108,6 @@ std::string DependenceGraph::declare_nodes(){
 
     auto &s = kv.second;
 
-    errs() << "basic block: " << kv.first->getName() << "\n";
-
     for (auto *node : s){
       std::string id = ID(node);
       std::string label = node->label();
@@ -118,7 +116,6 @@ std::string DependenceGraph::declare_nodes(){
 
     bool first = true;
     str += TAB + TAB;
-    errs() << s.size() << "\n";
     for (auto *node : s){
       std::string id = ID(node);
       if (first)

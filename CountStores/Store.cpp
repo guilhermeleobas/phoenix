@@ -137,7 +137,7 @@ bool Store::runOnModule(Module &M) {
   for (auto &F : M) {
     if (F.isDeclaration() || F.isIntrinsic() || F.hasAvailableExternallyLinkage())
       continue;
-
+    
     Identify *Idn = &getAnalysis<Identify>(F);
 
     llvm::SmallVector<Geps, 10> gs = Idn->get_instructions_of_interest();
@@ -155,6 +155,7 @@ bool Store::runOnModule(Module &M) {
       if (StoreInst *S = dyn_cast<StoreInst>(&I)){
         bool marked = (marked_stores.find(S) != marked_stores.end()) ? true : false;
         unsigned store_id = get_id(S);
+        errs() << "Store[" << store_id << "]: " << *S << "\n"; 
         track_store(&M, S, store_id, marked);
       }
     }

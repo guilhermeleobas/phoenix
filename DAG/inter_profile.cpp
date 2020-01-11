@@ -283,6 +283,7 @@ static void slice_function(Function *clone, Instruction *target) {
   // ensure that the sliced function will not introduce any side effect
   for (Instruction &I : instructions(*clone)) {
     assert(!isa<StoreInst>(I) && "sampling function has a store instruction");
+
     for (unsigned i = 0; i < I.getNumOperands(); i++) {
       assert(!isa<UndefValue>(I.getOperand(i)) && "operand is undef");
     }
@@ -413,6 +414,8 @@ static BasicBlock *find_exit_block(Function *F) {
     if (isa<ReturnInst>(&I))
       return I.getParent();
 
+  return BasicBlock::Create(F->getContext(), "exit_block", F);
+
   llvm_unreachable("could not find exit block!");
 }
 
@@ -480,7 +483,10 @@ static Instruction *get_predicate(BasicBlock *BB) {
   Value *term = BB->getTerminator();
   assert(isa<BranchInst>(term) && "BB TerminatorInst is not a branch inst");
   BranchInst *br = cast<BranchInst>(term);
-  return cast<Instruction>(br->getCondition());
+  if (br->isConditional())
+    return cast<Instruction>(br->getCondition());
+  else
+    return get_predicate(BB->getSingleSuccessor());
 }
 
 static PHINode *getInductionVariable(Loop *L) {
