@@ -119,56 +119,6 @@ void ProgramSlicing::set_entry_block(Function *F, LoopInfo &LI, Loop *L) {
 
 }
 
-// bool ProgramSlicing::set_exit_block(Function *F, Loop *L) {
-//   SmallVector<BasicBlock*, 10> ExitBlocks;
-//   //BasicBlock *L_exit = L->getExitBlock();
-//   BasicBlock *L_exit = nullptr;
-//   L->getExitBlocks(ExitBlocks);
-
-//   for (BasicBlock *BB : ExitBlocks) {
-
-//     Instruction *branch = BB->getTerminator();
-//     BasicBlock *L_exit_tmp = nullptr;
-
-//     branch->dump();
-
-//     if (BranchInst *BI = dyn_cast<BranchInst>(branch))
-//       if (!BI->isUnconditional())
-//         return false;
-
-//     if (BranchInst *BI = dyn_cast<BranchInst>(branch))
-//       L_exit_tmp = BI->getSuccessor(0);
-//     else{
-//       L_exit_tmp = BB;
-//     }
-      
-//     if (L_exit == nullptr)
-//       L_exit = L_exit_tmp;
-//     // Invalidate whenever it is not the same Target Basic Block
-//     if (L_exit != L_exit_tmp){
-//       errs() << "3\n";
-//       return false;
-//     }
-
-//   }
-//   assert (L_exit != nullptr && "L_exit is nullptr");
-//   BasicBlock *exit = BasicBlock::Create(F->getContext(), "function_exit", F, L_exit);
-//   IRBuilder<> Builder(exit);
-//   Builder.CreateRetVoid();
-//   Instruction *branch = L_exit->getTerminator();
-
-//   // We do not need to create a return inst, if it is the terminator.
-//   if (ReturnInst *RI = dyn_cast<ReturnInst>(branch))
-//     return true;
-
-//   Builder.SetInsertPoint(branch);
-//   Builder.CreateBr(exit);
-//   branch->dropAllReferences();
-//   branch->eraseFromParent();
-
-//   return true;
-// }
-
 void ProgramSlicing::set_exit_block(Function *F) {
   BasicBlock *F_exit = nullptr;
 
@@ -192,107 +142,13 @@ void ProgramSlicing::set_exit_block(Function *F) {
   ret->eraseFromParent();
 }
 
-void ProgramSlicing::connect_basic_blocks(BasicBlock *to, BasicBlock *from){
-  Instruction *term = to->getTerminator();
-  IRBuilder<> Builder(term);
-  Builder.CreateBr(from);
-  term->dropAllReferences();
-  term->eraseFromParent();
-}
-
-void ProgramSlicing::connect_body_to_latch(BasicBlock *body, BasicBlock *latch){
-  connect_basic_blocks(body, latch);
-}
-
-void ProgramSlicing::connect_header_to_body(Loop *L, BasicBlock *body){
-  BasicBlock *header = L->getHeader();
-  BasicBlock *exit = L->getExitBlock();
-
-  Instruction *term = header->getTerminator();
-  assert(isa<BranchInst>(term) && "term is not a branch inst");
-  BranchInst *br = cast<BranchInst>(term);
-
-  // assert(br->getNumSuccessors() == 2 && "branch instruction has more/less than 2 successors");
-
-  if (br->getNumSuccessors() == 2){
-    if (br->getSuccessor(0) != exit){
-      br->setSuccessor(0, body);
-    }
-    else {
-      br->setSuccessor(1, body);
-    }
-  }
-}
-
-// Remove all subloops except for @marked
-void ProgramSlicing::remove_subloops(Loop *L, Loop *marked){
-  for (Loop *sub : L->getSubLoops()){
-    if (sub == marked)
-      continue;
-
-    // connect the subloop preheader to its exit
-    connect_basic_blocks(sub->getLoopPreheader(), sub->getExitBlock());
-  }
-}
-
-Loop *ProgramSlicing::remove_loops_outside_chain(Loop *parent, Loop *child) {
-  if (parent == nullptr){
-    return child;
-  }
-
-  remove_subloops(parent, child);
-
-  // Connect the child exit block to the parent latch block
-  BasicBlock *exit = child->getExitBlock();
-  BasicBlock *latch = parent->getLoopLatch();
-
-  assert (exit != nullptr && latch != nullptr && "exit or parent is null\n");
-
-  Instruction *term = exit->getTerminator();
-  IRBuilder<> Builder(term);
-
-  Builder.CreateBr(latch);
-  term->dropAllReferences();
-  term->eraseFromParent();
-
-  return remove_loops_outside_chain(parent->getParentLoop(), parent);
-}
-
-Loop *ProgramSlicing::remove_loops_outside_chain(LoopInfo &LI, BasicBlock *BB) {
-  Loop *L = LI.getLoopFor(BB);
-  if (L == nullptr)
-    return nullptr;
-
-  remove_subloops(L, nullptr);
-
-  // connect header to body
-  // connect_header_to_body(L, BB);
-  // connect body to latch
-  // connect_body_to_latch(BB, L->getLoopLatch());
-
-  Loop *outer = remove_loops_outside_chain(L->getParentLoop(), L);
-
-  Function *F = BB->getParent();
-
-  return outer;
-}
-
-// Returns the number of users of a given instruction
-unsigned get_num_users(Instruction *I) {
-  unsigned nUsers = 0;
-
-  for (User *u : I->users())
-    ++nUsers;
-
-  return nUsers;
-}
-
 std::set<BasicBlock*> compute_alive_blocks(Function *F, std::set<Instruction*> &dependences){
   std::set<BasicBlock*> alive;
 
   for (auto &BB : *F){
     for (Instruction &I : BB){
       if (dependences.find(&I) != dependences.end()){
+        errs() << "alive: " << BB.getName() << "\n";
         alive.insert(&BB);
         break;
       }
@@ -317,6 +173,7 @@ unsigned num_succ(BasicBlock *BB){
 }
 
 void connect_indirect_jump(BasicBlock *pred, BasicBlock *succ){
+  errs() << "Connecting: " << pred->getName() << " -> " << succ->getName();
   BranchInst *term = cast<BranchInst>(pred->getTerminator());
   assert(term->getNumSuccessors() == 1);
   term->setSuccessor(0, succ);
@@ -327,6 +184,7 @@ void connect_cond_jump(BasicBlock *pred, BasicBlock *BB, BasicBlock *succ){
   BranchInst *term = cast<BranchInst>(pred->getTerminator());
   for (unsigned i = 0; i < term->getNumSuccessors(); i++){
     if (term->getSuccessor(i) == BB){
+      errs() << "Setting successor of : " << pred->getName() << " -> " << succ->getName() << "\n";
       term->setSuccessor(i, succ);
       return;
     }
@@ -352,6 +210,10 @@ bool conditional_to_direct(BasicBlock *BB){
     We replace it by a direct jump:
      br label %succ 
   */
+
+  if (BB->empty()
+      || BB->getTerminator() == nullptr)
+    return false;
 
   if (!isa<BranchInst>(BB->getTerminator()))
     return false;
@@ -385,6 +247,10 @@ bool fix_conditional_jump_to_same_block(BasicBlock *BB){
      br label %succ 
   */
 
+  if (BB->empty()
+      || BB->getTerminator() == nullptr)
+    return false;
+
   if (!isa<BranchInst>(BB->getTerminator()))
     return false;
 
@@ -402,6 +268,13 @@ bool fix_conditional_jump_to_same_block(BasicBlock *BB){
   return true;
 }
 
+void delete_branch(BasicBlock *BB){
+  assert(isa<BranchInst>(BB->getTerminator()));
+  BranchInst *term = cast<BranchInst>(BB->getTerminator());
+  term->dropAllReferences();
+  term->eraseFromParent();
+}
+
 bool remove_successor(BasicBlock *BB, BasicBlock *succ){
   if (!isa<BranchInst>(BB->getTerminator()))
     return false;
@@ -409,7 +282,7 @@ bool remove_successor(BasicBlock *BB, BasicBlock *succ){
   BranchInst *term = cast<BranchInst>(BB->getTerminator());
 
   if (term->isUnconditional()){
-    connect_indirect_jump(BB, BB);
+    delete_branch(BB);
   }
   else {
     unsigned idx = (term->getSuccessor(0) == succ) ? 1 : 0;
@@ -441,12 +314,32 @@ std::vector<BasicBlock*> collect_predecessors(BasicBlock *BB){
   return v;
 }
 
+void erase_block(BasicBlock *BB){
+  if (!BB->empty()){
+    std::queue<Instruction*> q;
+    for (Instruction &I : *BB){
+      I.dropAllReferences();
+      I.replaceAllUsesWith(UndefValue::get(I.getType()));
+      q.push(&I);
+    }
+
+    while (!q.empty()) {
+      Instruction *I = q.front();
+      q.pop();
+      I->eraseFromParent();
+    }
+  } 
+  BB->dropAllReferences();
+  BB->eraseFromParent();
+}
+
 void delete_block(BasicBlock *BB){
   /*
     1. If the block has a single predecessor/successor, connect them
   */
 
-  // errs() << "deleting block: " << BB->getName() << "\n\n";
+  errs() << "deleting block: " << BB->getName() << "\n\n";
+  Function *F = BB->getParent();
 
   conditional_to_direct(BB);
   fix_conditional_jump_to_same_block(BB);
@@ -462,8 +355,17 @@ void delete_block(BasicBlock *BB){
   else if (num_pred(BB) == 1 and num_succ(BB) == 1){
     auto *pred = BB->getSinglePredecessor();
     auto *succ = BB->getSingleSuccessor();
-    connect_pred_to_succ(pred, BB, succ);
-    fix_phi_nodes(pred, BB, succ);
+    if (pred != succ){
+      connect_pred_to_succ(pred, BB, succ);
+      fix_phi_nodes(pred, BB, succ);
+    }
+    else {
+      // pred -> BB 
+      //   ^      |
+      //   |______|
+      errs() << "Disconnecting " << pred->getName() << " -> " << BB->getName() << "\n";
+      remove_successor(pred, BB);
+    }
   } 
   else if (num_pred(BB) > 1 and num_succ(BB) == 1){
     auto preds = collect_predecessors(BB);
@@ -474,14 +376,17 @@ void delete_block(BasicBlock *BB){
       fix_phi_nodes(pred, BB, succ);
     }
   }
+  else if (num_pred(BB) == 1 and num_succ(BB) > 1){
+    
+  }
+  else if (num_pred(BB) > 1 and num_succ(BB) > 1){
+    assert("both #predecessors and #successors are greater than 1");
+  }
 
-  // connect_indirect_jump(BB, BB);
+  // if (F->getName() == "sampling.6")
+  // F->viewCFG();
 
-  auto *term = BB->getTerminator();
-  term->dropAllReferences();
-  term->eraseFromParent();
-  BB->dropAllReferences();
-  BB->eraseFromParent();
+  erase_block(BB);
 }
 
 std::vector<BasicBlock*> get_dead_blocks(Function *F, std::set<BasicBlock*> &alive_blocks){
@@ -563,6 +468,7 @@ void ProgramSlicing::slice(Function *F, Instruction *I) {
   std::set<BasicBlock*> alive_blocks = compute_alive_blocks(F, dependences);
 
   std::queue<Instruction *> q;
+
   for (Instruction &I : instructions(F)) {
     if (isa<BranchInst>(&I) || isa<ReturnInst>(&I) || dependences.find(&I) != dependences.end())
       continue;
@@ -585,8 +491,9 @@ void ProgramSlicing::slice(Function *F, Instruction *I) {
 
   delete_blocks(F, alive_blocks);
 
+  // F->viewCFG();
   u.run(*F, FAM);
-  sf.run(*F, FAM);
+  // sf.run(*F, FAM);
   // F->viewCFG();
   // VerifierPass ver;
   // ver.run(*F, FAM);

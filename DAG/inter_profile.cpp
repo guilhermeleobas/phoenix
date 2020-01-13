@@ -537,6 +537,7 @@ static void change_loop_range(Function *C, Loop *L) {
     else
       cmp->setPredicate(CmpInst::Predicate::ICMP_SLT);
   }
+  errs() << "Aqui\n";
 
   // add_dump_msg(pred, "pred: %d\n", pred);
   // add_dump_msg(pred, "first operand: %d\n", pred->getOperand(0));
@@ -686,6 +687,9 @@ void inter_profilling(Function *F,
                       std::vector<ReachableNodes> &reachables) {
   std::map<Loop *, std::vector<ReachableNodes>> mapa;
 
+  if (F->getName() != "TraceLine")
+    return;
+
   if (reachables.empty())
     return;
 
@@ -701,8 +705,6 @@ void inter_profilling(Function *F,
     DT->recalculate(*F);
     inter_profilling(F, LI, DT, kv.second, kv.second.size());
   }
-
-  // F->viewCFG();
 }
 
 }  // namespace phoenix
