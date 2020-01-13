@@ -7,6 +7,7 @@
 #include "llvm/CodeGen/UnreachableBlockElim.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Transforms/Scalar/DCE.h"
+#include "llvm/Transforms/Scalar/Sink.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Transforms/Utils/LoopUtils.h"
@@ -148,7 +149,7 @@ std::set<BasicBlock*> compute_alive_blocks(Function *F, std::set<Instruction*> &
   for (auto &BB : *F){
     for (Instruction &I : BB){
       if (dependences.find(&I) != dependences.end()){
-        errs() << "alive: " << BB.getName() << "\n";
+        // errs() << "alive: " << BB.getName() << "\n";
         alive.insert(&BB);
         break;
       }
@@ -173,7 +174,7 @@ unsigned num_succ(BasicBlock *BB){
 }
 
 void connect_indirect_jump(BasicBlock *pred, BasicBlock *succ){
-  errs() << "Connecting: " << pred->getName() << " -> " << succ->getName();
+  // errs() << "Connecting: " << pred->getName() << " -> " << succ->getName();
   BranchInst *term = cast<BranchInst>(pred->getTerminator());
   assert(term->getNumSuccessors() == 1);
   term->setSuccessor(0, succ);
@@ -184,7 +185,7 @@ void connect_cond_jump(BasicBlock *pred, BasicBlock *BB, BasicBlock *succ){
   BranchInst *term = cast<BranchInst>(pred->getTerminator());
   for (unsigned i = 0; i < term->getNumSuccessors(); i++){
     if (term->getSuccessor(i) == BB){
-      errs() << "Setting successor of : " << pred->getName() << " -> " << succ->getName() << "\n";
+      // errs() << "Setting successor of : " << pred->getName() << " -> " << succ->getName() << "\n";
       term->setSuccessor(i, succ);
       return;
     }
@@ -333,12 +334,38 @@ void erase_block(BasicBlock *BB){
   BB->eraseFromParent();
 }
 
+bool merge_return_blocks(Function *F){
+
+  std::vector<BasicBlock*> v;
+
+  for (BasicBlock &BB : *F) {
+    if (!BB.empty()
+        && isa<ReturnInst>(BB.getTerminator()))
+      v.push_back(&BB);
+  }
+
+  if (v.size() == 1)
+    return false;
+
+  BasicBlock *ret = BasicBlock::Create(F->getContext(), "function_exit", F, nullptr);
+  auto *ri = ReturnInst::Create(F->getContext(), nullptr, ret);
+
+  for (BasicBlock *BB : v){
+    auto *term = BB->getTerminator();
+    BranchInst *br = BranchInst::Create(ret, term);
+    term->dropAllReferences();
+    term->eraseFromParent();
+  }
+
+  return true;
+}
+
 void delete_block(BasicBlock *BB){
   /*
     1. If the block has a single predecessor/successor, connect them
   */
 
-  errs() << "deleting block: " << BB->getName() << "\n\n";
+  // errs() << "deleting block: " << BB->getName() << "\n\n";
   Function *F = BB->getParent();
 
   conditional_to_direct(BB);
@@ -363,7 +390,7 @@ void delete_block(BasicBlock *BB){
       // pred -> BB 
       //   ^      |
       //   |______|
-      errs() << "Disconnecting " << pred->getName() << " -> " << BB->getName() << "\n";
+      // errs() << "Disconnecting " << pred->getName() << " -> " << BB->getName() << "\n";
       remove_successor(pred, BB);
     }
   } 
@@ -376,15 +403,9 @@ void delete_block(BasicBlock *BB){
       fix_phi_nodes(pred, BB, succ);
     }
   }
-  else if (num_pred(BB) == 1 and num_succ(BB) > 1){
-    
-  }
-  else if (num_pred(BB) > 1 and num_succ(BB) > 1){
+  else if (num_pred(BB) >= 1 and num_succ(BB) > 1){
     assert("both #predecessors and #successors are greater than 1");
   }
-
-  // if (F->getName() == "sampling.6")
-  // F->viewCFG();
 
   erase_block(BB);
 }
@@ -412,11 +433,16 @@ bool can_delete_block(Function *F, BasicBlock *BB){
 }
 
 void delete_blocks(Function *F, std::set<BasicBlock*> &alive_blocks){
+  merge_return_blocks(F);
   auto dead_blocks = get_dead_blocks(F, alive_blocks);
 
+  FunctionAnalysisManager FAM;
+  SinkingPass si;
+
   for (auto *BB : dead_blocks){
-    if (can_delete_block(F, BB))
+    if (can_delete_block(F, BB)){
       delete_block(BB);
+    }
   }
 }
 
@@ -460,6 +486,9 @@ void ProgramSlicing::slice(Function *F, Instruction *I) {
   SimplifyCFGPass sf;
   sf.run(*F, FAM);
 
+  SinkingPass si;
+  si.run(*F, FAM);
+
   ProgramDependenceGraph PDG;
   PDG.compute_dependences(F);
   std::set<Instruction*> dependences = PDG.get_dependences_for(I);
@@ -486,24 +515,21 @@ void ProgramSlicing::slice(Function *F, Instruction *I) {
 
   delete_empty_blocks(F);
 
+  alive_blocks = compute_alive_blocks(F, dependences);
+
   u.run(*F, FAM);
+  si.run(*F, FAM);
   sf.run(*F, FAM);
+
 
   delete_blocks(F, alive_blocks);
 
-  // F->viewCFG();
   u.run(*F, FAM);
   // sf.run(*F, FAM);
-  // F->viewCFG();
+
   // VerifierPass ver;
   // ver.run(*F, FAM);
 
-  // EliminateUnreachableBlocks(*F);
-
-  // u.run(*F, FAM);
-  // d.run(*F, FAM);
-
-  // assert(0);
 }
 
 }  // namespace phoenix
