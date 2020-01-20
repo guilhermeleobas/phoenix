@@ -686,6 +686,9 @@ void inter_profilling(Function *F,
                       std::vector<ReachableNodes> &reachables) {
   std::map<Loop *, std::vector<ReachableNodes>> mapa;
 
+  if (F->getName() != "TraceLine")
+    return;
+
   if (reachables.empty())
     return;
 

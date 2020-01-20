@@ -2,6 +2,9 @@
 
 #include "../PDG/PDGAnalysis.h"
 #include "llvm/Analysis/LoopInfo.h"
+#include "llvm/Analysis/RegionInfo.h"
+#include "llvm/Analysis/PostDominators.h"
+#include "llvm/Analysis/DominanceFrontier.h"
 #include "llvm/IR/Verifier.h"
 
 #include "llvm/CodeGen/UnreachableBlockElim.h"
@@ -12,6 +15,8 @@
 #include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Transforms/Utils/LoopUtils.h"
 #include "llvm/Transforms/Scalar/SimplifyCFG.h"
+
+#include "llvm/Support/GraphWriter.h"
 
 #include <iterator>
 #include <queue>
@@ -92,33 +97,6 @@ bool EliminateUnreachableBlocks(Function &F, bool KeepOneInputPHIs=false) {
   return !DeadBlocks.empty();
 }
 
-void ProgramSlicing::set_entry_block(Function *F, LoopInfo &LI, Loop *L) {
-
-  BasicBlock *preheader = L->getLoopPreheader();
-  BasicBlock *entry = &F->getEntryBlock();
-  if (entry == preheader)
-    return;
-
-  // Walk on the parent chain changing the conditional branchs to a direct branch
-  // until we reach *entry
-  BasicBlock *child = preheader;
-  while (child != entry){
-    // if the child belongs to a loop, the parent is the loop preheader;
-    // otherwise, the parent is the loop predecessor
-    BasicBlock *parent = nullptr;
-
-    if (LI.isLoopHeader(child))
-      parent = LI.getLoopFor(child)->getLoopPreheader();
-    else
-      parent = child->getUniquePredecessor();
-
-    assert(parent && "parent == nullptr");
-
-    connect_basic_blocks(parent, child);
-    child = parent;
-  }
-
-}
 
 void ProgramSlicing::set_exit_block(Function *F) {
   BasicBlock *F_exit = nullptr;
@@ -173,35 +151,61 @@ unsigned num_succ(BasicBlock *BB){
   return i;
 }
 
-void connect_indirect_jump(BasicBlock *pred, BasicBlock *succ){
+bool replace_jump_by_selfedge(BasicBlock *curr){
+  if (!curr->size())
+    return false;
+
+  assert(curr->size() == 1);
+
+  BranchInst *term = cast<BranchInst>(curr->getTerminator());
+  BranchInst *rep = BranchInst::Create(curr, term);
+  term->dropAllReferences();
+  term->eraseFromParent();
+
+  return true;
+}
+
+/*
+  ...
+*/
+void replace_direct_jump(BasicBlock *pred, BasicBlock *postdom){
   // errs() << "Connecting: " << pred->getName() << " -> " << succ->getName();
   BranchInst *term = cast<BranchInst>(pred->getTerminator());
   assert(term->getNumSuccessors() == 1);
-  term->setSuccessor(0, succ);
+  term->setSuccessor(0, postdom);
 }
 
-// Pred contains a conditional jump
-void connect_cond_jump(BasicBlock *pred, BasicBlock *BB, BasicBlock *succ){
+/*
+      pred
+      /   \ 
+     /     \
+    curr  other
+      |     |
+     ...   ...
+      |
+     pdom
+*/
+void replace_conditional_jump(BasicBlock *pred, BasicBlock *curr, BasicBlock *postdom){
   BranchInst *term = cast<BranchInst>(pred->getTerminator());
   for (unsigned i = 0; i < term->getNumSuccessors(); i++){
-    if (term->getSuccessor(i) == BB){
+    if (term->getSuccessor(i) == curr){
       // errs() << "Setting successor of : " << pred->getName() << " -> " << succ->getName() << "\n";
-      term->setSuccessor(i, succ);
+      term->setSuccessor(i, postdom);
       return;
     }
   }
 }
 
-void connect_pred_to_succ(BasicBlock *pred, BasicBlock *BB, BasicBlock *succ){
-  /*
-    @pred -> @BB -> @succ
-  */
-  // errs() << "Connecting: " << pred->getName() << " to " << succ->getName() << "\n";
-  if (num_succ(pred) == 1)
-    connect_indirect_jump(pred, succ);
-  else
-    connect_cond_jump(pred, BB, succ);
+/*
+  Remove the edge from @pred to @curr and create a new one from @pred to @postdom
+*/
+void connect_pred_to_postdom(BasicBlock *pred, BasicBlock *curr, BasicBlock *postdom){
+  // errs() << "Connecting: " << pred->getName() << " to " << postdom->getName() << "\n";
 
+  if (num_succ(pred) == 1)
+    replace_direct_jump(pred, postdom);
+  else
+    replace_conditional_jump(pred, curr, postdom);
 }
 
 bool conditional_to_direct(BasicBlock *BB){
@@ -296,7 +300,6 @@ bool remove_successor(BasicBlock *BB, BasicBlock *succ){
 }
 
 void fix_phi_nodes(BasicBlock *prev, BasicBlock *BB, BasicBlock *succ) {
-
   auto *Old = BB;
   auto *New = prev;
   for (PHINode &phi : succ->phis()){
@@ -304,10 +307,9 @@ void fix_phi_nodes(BasicBlock *prev, BasicBlock *BB, BasicBlock *succ) {
       if (phi.getIncomingBlock(Op) == Old)
         phi.setIncomingBlock(Op, New);
   }
-
 }
 
-std::vector<BasicBlock*> collect_predecessors(BasicBlock *BB){
+std::vector<BasicBlock*> get_predecessors(BasicBlock *BB){
   std::vector<BasicBlock*> v;
   for (BasicBlock *pred : predecessors(BB)){
     v.push_back(pred);
@@ -315,7 +317,7 @@ std::vector<BasicBlock*> collect_predecessors(BasicBlock *BB){
   return v;
 }
 
-void erase_block(BasicBlock *BB){
+void erase_block(PostDominatorTree &PDT, BasicBlock *BB){
   if (!BB->empty()){
     std::queue<Instruction*> q;
     for (Instruction &I : *BB){
@@ -360,64 +362,16 @@ bool merge_return_blocks(Function *F){
   return true;
 }
 
-void delete_block(BasicBlock *BB){
-  /*
-    1. If the block has a single predecessor/successor, connect them
-  */
-
-  // errs() << "deleting block: " << BB->getName() << "\n\n";
-  Function *F = BB->getParent();
-
-  conditional_to_direct(BB);
-  fix_conditional_jump_to_same_block(BB);
-
-  if (num_succ(BB) == 0){
-    // BB->getParent()->viewCFG();
-    auto preds = collect_predecessors(BB);
-    for (auto *pred : preds){
-      remove_successor(pred, BB);
-    }
-    // BB->getParent()->viewCFG();
-  }
-  else if (num_pred(BB) == 1 and num_succ(BB) == 1){
-    auto *pred = BB->getSinglePredecessor();
-    auto *succ = BB->getSingleSuccessor();
-    if (pred != succ){
-      connect_pred_to_succ(pred, BB, succ);
-      fix_phi_nodes(pred, BB, succ);
-    }
-    else {
-      // pred -> BB 
-      //   ^      |
-      //   |______|
-      // errs() << "Disconnecting " << pred->getName() << " -> " << BB->getName() << "\n";
-      remove_successor(pred, BB);
-    }
-  } 
-  else if (num_pred(BB) > 1 and num_succ(BB) == 1){
-    auto preds = collect_predecessors(BB);
-
-    for (BasicBlock *pred : preds){
-      auto *succ = BB->getSingleSuccessor();
-      connect_pred_to_succ(pred, BB, succ);
-      fix_phi_nodes(pred, BB, succ);
-    }
-  }
-  else if (num_pred(BB) >= 1 and num_succ(BB) > 1){
-    assert("both #predecessors and #successors are greater than 1");
-  }
-
-  erase_block(BB);
-}
-
-std::vector<BasicBlock*> get_dead_blocks(Function *F, std::set<BasicBlock*> &alive_blocks){
+std::vector<BasicBlock*> compute_dead_blocks(Function *F, std::set<BasicBlock*> &alive_blocks){
   df_iterator_default_set<BasicBlock *> Reachable;
   std::vector<BasicBlock*> d;
 
   for (BasicBlock *BB : depth_first_ext(F, Reachable)){
+    if (!BB->empty() && isa<ReturnInst>(BB->getTerminator()))
+      continue;
     if (alive_blocks.find(BB) == alive_blocks.end()){
       d.push_back(BB);
-    }
+    } 
   }
 
   std::reverse(d.begin(), d.end());
@@ -426,24 +380,9 @@ std::vector<BasicBlock*> get_dead_blocks(Function *F, std::set<BasicBlock*> &ali
 }
 
 bool can_delete_block(Function *F, BasicBlock *BB){
-  // if (&F->getEntryBlock() == BB)
   if (&F->getEntryBlock() == BB || isa<ReturnInst>(BB->getTerminator()))
     return false;
   return true;
-}
-
-void delete_blocks(Function *F, std::set<BasicBlock*> &alive_blocks){
-  merge_return_blocks(F);
-  auto dead_blocks = get_dead_blocks(F, alive_blocks);
-
-  FunctionAnalysisManager FAM;
-  SinkingPass si;
-
-  for (auto *BB : dead_blocks){
-    if (can_delete_block(F, BB)){
-      delete_block(BB);
-    }
-  }
 }
 
 void delete_empty_blocks(Function *F){
@@ -463,38 +402,47 @@ void delete_empty_blocks(Function *F){
   }
 }
 
-void ProgramSlicing::slice(Function *F, Instruction *I) {
-  errs() << "[INFO]: Applying slicing on: " << F->getName() << "\n";
+/*
+  We split the live of each predicate that is defined in a different basic block
 
-  DominatorTree DT(*F);
-  PostDominatorTree PDT;
-  PDT.recalculate(*F);
-  LoopInfo LI(DT);
+  %Foo
+    %cmp = ...
+    %cond = ...
+    br i1 %cond, label %Bar, label %Baz
 
-  set_exit_block(F);
+  %Bar
+    br i1 %cmp, label %Baz, label %Foo 
 
-  PassBuilder PB;
-  FunctionAnalysisManager FAM;
-  PB.registerFunctionAnalyses(FAM);
+  # Here, %cmp is used but it is defined on %Foo. To circumvent this case
+  # we split the live of %cmp with a PHI node:
 
-  UnreachableBlockElimPass u;
-  u.run(*F, FAM);
+  %Bar2
+    %cmp_PHI = PHI [%cmp, %Foo]
+    br i1 %cmp_PHI, label %Baz, label %Foo 
+*/
+void split_predicate_live(Function *F){
+  for (BasicBlock &BB : *F) {
 
-  DCEPass d;
-  d.run(*F, FAM);
+    // Only interested in branch insts
+    if (BB.empty() || !isa<BranchInst>(BB.getTerminator()))
+      continue;
 
-  SimplifyCFGPass sf;
-  sf.run(*F, FAM);
+    // Branch must be conditional
+    auto *br = cast<BranchInst>(BB.getTerminator());
+    if (br->isUnconditional())
+      continue;
 
-  SinkingPass si;
-  si.run(*F, FAM);
+    // Only for predicates that are defined in a different basic block
+    auto *pred = cast<Instruction>(br->getCondition());
+    if (pred->getParent() == &BB)
+      continue;
 
-  ProgramDependenceGraph PDG;
-  PDG.compute_dependences(F);
-  std::set<Instruction*> dependences = PDG.get_dependences_for(I);
-  // PDG.get_dependence_graph()->to_dot();
+    PHINode *phi = PHINode::Create(pred->getType(), 1, pred->getName(), BB.getFirstNonPHI());
+    phi->addIncoming(pred, &BB);
+  }
+}
 
-  std::set<BasicBlock*> alive_blocks = compute_alive_blocks(F, dependences);
+void delete_dead_instructions(Function *F, std::set<Instruction*> &dependences){
 
   std::queue<Instruction *> q;
 
@@ -513,18 +461,145 @@ void ProgramSlicing::slice(Function *F, Instruction *I) {
     I->eraseFromParent();
   }
 
-  delete_empty_blocks(F);
+  delete_empty_blocks(F); 
+}
 
-  alive_blocks = compute_alive_blocks(F, dependences);
+/*
+  Do a BFS and find basic blocks from *curr to *postdom
+*/
+std::vector<PathEdge*> bfs(std::set<BasicBlock*> &alive, BasicBlock *curr, BasicBlock *postdom){
+  std::queue<BasicBlock*> q;
+  std::set<BasicBlock*> visited;
+  std::vector<PathEdge*> path;
 
+  q.push(curr);
+
+  while (!q.empty()){
+    auto *node = q.front();
+    q.pop();
+
+    if (node == postdom)
+      break;
+
+    for (auto *succ : successors(node)){
+      if (visited.find(succ) != visited.end()
+          || alive.find(succ) != alive.end())
+        continue;
+
+      visited.insert(succ);
+
+      path.push_back(new PathEdge(node, succ));
+      q.push(succ);
+    }
+  }
+
+  return path;
+}
+
+/*
+  If @curr can be removed, than his entire region of influence can be removed as well.
+  Thus, we remove curr by making each predecessor point to @postdom.
+  From theory, the post-dominator of a basic block is unique.
+*/
+void remove_block(PostDominatorTree &PDT,
+                  std::set<BasicBlock *> &alive,
+                  std::vector<BasicBlock *> &dead,
+                  BasicBlock *curr,
+                  BasicBlock *postdom) {
+  curr->getParent()->viewCFG();
+  if (num_pred(curr) > 0){
+    for (BasicBlock *pred : get_predecessors(curr)){
+      connect_pred_to_postdom(pred, curr, postdom);
+    }
+
+    /* We do a bfs to find the set of reachable blocks starting from @curr. Those blocks
+      can be safely deleted.
+      
+      For each block we delete, we must also update its reference on the appropriated
+      postdominator structure.
+    */
+    auto path = bfs(alive, curr, postdom);
+    curr->getParent()->viewCFG();
+    for (auto *p : path){
+      replace_jump_by_selfedge(p->from);
+      PDT.deleteEdge(p->from, p->to);
+      errs() << "Updating PDT: " << p->from->getName() << " -> " << p->to->getName() << "\n";
+    }
+
+    curr->getParent()->viewCFG();
+
+    for (auto *p : path){
+      if (p->from)
+        erase_block(PDT, p->from);
+      if (p->to)
+        erase_block(PDT, p->to);
+    }
+  } else {
+    // to-do
+  }
+
+  // curr->getParent()->viewCFG();
+}
+
+void ProgramSlicing::slice(Function *F, Instruction *I) {
+  errs() << "[INFO]: Applying slicing on: " << F->getName() << "\n";
+
+  // LoopInfo LI(DT);
+  set_exit_block(F);
+
+  PassBuilder PB;
+  FunctionAnalysisManager FAM;
+  PB.registerFunctionAnalyses(FAM);
+
+  UnreachableBlockElimPass u;
   u.run(*F, FAM);
-  si.run(*F, FAM);
+
+  DCEPass d;
+  d.run(*F, FAM);
+
+  SimplifyCFGPass sf;
   sf.run(*F, FAM);
 
+  SinkingPass si;
+  si.run(*F, FAM);
 
-  delete_blocks(F, alive_blocks);
+  split_predicate_live(F);
 
-  u.run(*F, FAM);
+  ProgramDependenceGraph PDG;
+  PDG.compute_dependences(F);
+  std::set<Instruction*> dependences = PDG.get_dependences_for(I);
+  // PDG.get_dependence_graph()->to_dot();
+
+  delete_dead_instructions(F, dependences);
+  delete_empty_blocks(F);
+
+  std::set<BasicBlock*> alive_blocks = compute_alive_blocks(F, dependences);
+  std::vector<BasicBlock*> dead_blocks = compute_dead_blocks(F, alive_blocks);
+
+  PostDominatorTree PDT;
+  PDT.recalculate(*F);
+  // DominatorTree DT(*F);
+  // DominanceFrontier DF;
+  // DF.analyze(DT);
+
+  // RegionInfo RI;
+  // RI.recalculate(*F, &DT, &PDT, &DF);
+
+  while (!dead_blocks.empty()){
+    auto *curr = *dead_blocks.begin();
+    dead_blocks.erase(dead_blocks.begin());
+    BasicBlock *postdom = PDT.getNode(curr)->getIDom()->getBlock();
+    errs() << "curr: " << curr->getName() << " -> postdom: " << postdom->getName() << "\n";
+    remove_block(PDT, alive_blocks, dead_blocks, curr, postdom);
+  }
+
+  // u.run(*F, FAM);
+  // si.run(*F, FAM);
+  // sf.run(*F, FAM);
+
+  // delete_blocks(F, alive_blocks);
+
+  // F->viewCFG();
   // sf.run(*F, FAM);
 
   // VerifierPass ver;
