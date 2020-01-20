@@ -318,20 +318,7 @@ std::vector<BasicBlock*> get_predecessors(BasicBlock *BB){
 }
 
 void erase_block(PostDominatorTree &PDT, BasicBlock *BB){
-  if (!BB->empty()){
-    std::queue<Instruction*> q;
-    for (Instruction &I : *BB){
-      I.dropAllReferences();
-      I.replaceAllUsesWith(UndefValue::get(I.getType()));
-      q.push(&I);
-    }
-
-    while (!q.empty()) {
-      Instruction *I = q.front();
-      q.pop();
-      I->eraseFromParent();
-    }
-  } 
+  errs() << "Deleting block: " << *BB << "\n\n";
   BB->dropAllReferences();
   BB->eraseFromParent();
 }
@@ -439,6 +426,8 @@ void split_predicate_live(Function *F){
 
     PHINode *phi = PHINode::Create(pred->getType(), 1, pred->getName(), BB.getFirstNonPHI());
     phi->addIncoming(pred, &BB);
+
+    br->setCondition(phi);
   }
 }
 
@@ -506,7 +495,6 @@ void remove_block(PostDominatorTree &PDT,
                   std::vector<BasicBlock *> &dead,
                   BasicBlock *curr,
                   BasicBlock *postdom) {
-  curr->getParent()->viewCFG();
   if (num_pred(curr) > 0){
     for (BasicBlock *pred : get_predecessors(curr)){
       connect_pred_to_postdom(pred, curr, postdom);
@@ -519,21 +507,16 @@ void remove_block(PostDominatorTree &PDT,
       postdominator structure.
     */
     auto path = bfs(alive, curr, postdom);
-    curr->getParent()->viewCFG();
     for (auto *p : path){
       replace_jump_by_selfedge(p->from);
-      PDT.deleteEdge(p->from, p->to);
+      // PDT.deleteEdge(p->from, p->to);
       errs() << "Updating PDT: " << p->from->getName() << " -> " << p->to->getName() << "\n";
     }
 
-    curr->getParent()->viewCFG();
-
-    for (auto *p : path){
-      if (p->from)
-        erase_block(PDT, p->from);
-      if (p->to)
-        erase_block(PDT, p->to);
-    }
+    // for (auto *p : path){
+    //   if (p->from)
+    //     erase_block(PDT, p->from);
+    // }
   } else {
     // to-do
   }
@@ -577,7 +560,6 @@ void ProgramSlicing::slice(Function *F, Instruction *I) {
   std::vector<BasicBlock*> dead_blocks = compute_dead_blocks(F, alive_blocks);
 
   PostDominatorTree PDT;
-  PDT.recalculate(*F);
   // DominatorTree DT(*F);
   // DominanceFrontier DF;
   // DF.analyze(DT);
@@ -586,6 +568,7 @@ void ProgramSlicing::slice(Function *F, Instruction *I) {
   // RI.recalculate(*F, &DT, &PDT, &DF);
 
   while (!dead_blocks.empty()){
+    PDT.recalculate(*F);
     auto *curr = *dead_blocks.begin();
     dead_blocks.erase(dead_blocks.begin());
     BasicBlock *postdom = PDT.getNode(curr)->getIDom()->getBlock();
@@ -595,7 +578,7 @@ void ProgramSlicing::slice(Function *F, Instruction *I) {
 
   // u.run(*F, FAM);
   // si.run(*F, FAM);
-  // sf.run(*F, FAM);
+  sf.run(*F, FAM);
 
   // delete_blocks(F, alive_blocks);
 
