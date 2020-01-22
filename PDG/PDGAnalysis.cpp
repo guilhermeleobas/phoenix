@@ -54,7 +54,7 @@ Value *ProgramDependenceGraph::get_predicate(PostDominatorTree *PDT,
   return br;
 }
 
-// Create control dependence edges from each y \in Y to the predicate *pred
+// Create control dependence edges for each y \in Y to the predicate *pred
 void ProgramDependenceGraph::create_control_edges(BasicBlock *Y, Value *pred) {
   if (pred == nullptr)
     return;
