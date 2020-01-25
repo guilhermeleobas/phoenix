@@ -489,8 +489,16 @@ static Instruction *get_predicate(BasicBlock *BB) {
     return get_predicate(BB->getSingleSuccessor());
 }
 
+static bool LoadingFromGlobal(Value *iv){
+  if (LoadInst *load = dyn_cast<LoadInst>(iv))
+    return isa<GlobalVariable>(load->getPointerOperand());
+  return false;
+}
+
 static PHINode *getInductionVariable(Loop *L) {
   BasicBlock *H = L->getHeader();
+
+  errs() << "[INFO] Header: " << H->getName() << "\n";
 
   BasicBlock *Incoming = nullptr, *Backedge = nullptr;
   if (!getIncomingAndBackEdge(L, Incoming, Backedge))
@@ -500,7 +508,8 @@ static PHINode *getInductionVariable(Loop *L) {
   for (BasicBlock::iterator I = H->begin(); isa<PHINode>(I); ++I) {
     PHINode *PN = cast<PHINode>(I);
     Value *iv = PN->getIncomingValueForBlock(Incoming);
-    if (isa<ConstantInt>(iv) || isa<PHINode>(iv))
+    if (isa<ConstantInt>(iv) || isa<PHINode>(iv) || 
+        (isa<LoadInst>(iv) && LoadingFromGlobal(iv)))
       if (Instruction *Inc = dyn_cast<Instruction>(PN->getIncomingValueForBlock(Backedge)))
         if ((Inc->getOpcode() == Instruction::Add && Inc->getOperand(0) == PN) ||
             (Inc->getOpcode() == Instruction::Sub && Inc->getOperand(0) == PN))
@@ -508,7 +517,6 @@ static PHINode *getInductionVariable(Loop *L) {
             return PN;
   }
 
-  errs() << "returning nullptr\n";
   return nullptr;
 }
 
@@ -521,11 +529,13 @@ static CallInst *create_call_to_rand(Function *C, IRBuilder<> &Builder) {
 
 static void change_loop_range(Function *C, Loop *L) {
   errs() << "[INFO]: changing loop range for " << C->getName() << "\n";
+  // C->viewCFG();
   PHINode *iv = getInductionVariable(L);
   assert(iv && "iv == nullptr");
   errs() << "induction variable: " << *iv << "\n";
 
   Type *I64Ty = IntegerType::getInt64Ty(C->getContext());
+  Type *I32Ty = IntegerType::getInt32Ty(C->getContext());
 
   Instruction *pred = get_predicate(iv->getParent());
   Value *array_size = pred->getOperand(1);
@@ -548,6 +558,7 @@ static void change_loop_range(Function *C, Loop *L) {
     if (incoming == L->getLoopLatch()) {
       Instruction *Inc = cast<Instruction>(iv->getOperand(i));
       errs() << "Inst: " << *Inc << "\n";
+
       // we know now that the *I is the increment instruction
       for (int j = 0; j < Inc->getNumOperands(); j++) {
         if (isa<ConstantInt>(Inc->getOperand(j))) {
@@ -558,17 +569,33 @@ static void change_loop_range(Function *C, Loop *L) {
 
           if (!array_size->getType()->isIntegerTy(64))
             array_size = Builder.CreateSExt(array_size, I64Ty);
+
           Value *rem = Builder.CreateSRem(sext, array_size, "rem");
+
+          if (Inc->getType()->isIntegerTy(32))
+            rem = Builder.CreateTrunc(rem, I32Ty);
 
           Inc->setOperand(j, rem);
 
           // in the outermost loop, we always take the array_size of the final value
           if (L->getParentLoop() == nullptr) {
             Builder.SetInsertPoint(Inc->getNextNode());
-            Value *final_rem = Builder.CreateSRem(Inc, array_size, "finalrem");
+
+            sext = Inc;
+            if (!Inc->getType()->isIntegerTy(64))
+              sext = Builder.CreateSExt(Inc, I64Ty);
+            if (!array_size->getType()->isIntegerTy(64))
+              array_size = Builder.CreateSExt(array_size, I64Ty);
+
+            errs() << "sext: " << *sext << "\n";
+            errs() << "array_size: " << *array_size << "\n";
+            Value *final_rem = Builder.CreateSRem(sext, array_size, "finalrem");
+            errs() << "final_rem: " << *final_rem << "\n\n";
             // replaces the uses of I with final_rem
-            Inc->replaceAllUsesWith(final_rem);
-            cast<Instruction>(final_rem)->setOperand(0, Inc);
+            sext->replaceAllUsesWith(final_rem);
+
+            // cast<Instruction>(final_rem)->setOperand(0, Inc);
+            cast<Instruction>(final_rem)->setOperand(0, sext);
           }
 
           // Deals with the case that the size of the loop (@array_size) and
@@ -686,8 +713,8 @@ void inter_profilling(Function *F,
                       std::vector<ReachableNodes> &reachables) {
   std::map<Loop *, std::vector<ReachableNodes>> mapa;
 
-  if (F->getName() != "TraceLine")
-    return;
+  // if (F->getName() != "TraceLine")
+  //   return;
 
   if (reachables.empty())
     return;

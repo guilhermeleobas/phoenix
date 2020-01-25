@@ -123,18 +123,20 @@ void replace_conditional_jump(BasicBlock *pred, BasicBlock *curr, BasicBlock *po
   }
 }
 
+/*
+  As the name suggests, this method transforms a constant into a value
+  by storing the constant as a global variable and then loading from it.
+*/
 Value* constant_to_value(Function *F, BasicBlock *BB, ConstantData *c){
-  IRBuilder<> Builder(BB->getFirstNonPHI());
-  Value *v = nullptr;
-  if (isa<ConstantInt>(c)){
-    auto *one = ConstantInt::get(c->getType(), 1);
-    v = Builder.CreateSub(Builder.CreateAdd(c, one), one);
-  } else {
-    auto *fone = ConstantFP::get(c->getType(), 1.0);
-    v = Builder.CreateFSub(Builder.CreateFAdd(c, fone), fone);
-  }
+  // errs() << "Basic Block: " << *BB << "\n";
+  Module *M = F->getParent();
+  std::string name = std::string(BB->getName()) + "_gv_" + std::to_string(random() % 1000000);
+  M->getOrInsertGlobal(name, c->getType());
+  auto *gv = M->getNamedGlobal(name);
+  gv->setInitializer(c);
 
-  errs() << "Criou value: " << *v << "\n" << *BB << "\n\n";
+  IRBuilder<> Builder(BB->getFirstNonPHI());
+  Value *v = Builder.CreateLoad(gv);
   return v;
 }
 
@@ -149,12 +151,14 @@ Value* constant_to_value(Function *F, BasicBlock *BB, ConstantData *c){
 
   if.then24.s:
     ...
-    %v = add 10, 0
+    %v = load i32 %some_global_ptr
 
   for.cond.s:
     %i.0.s = phi i32 [ %v, %if.then24.s ], [ %inc40.s, %for.body.s ]
     ...                ^^^^^^^^^^^^^^^
 
+  This is important because memory isn't in SSA form, so this is a way
+  to capture/create a data dependency.
 */
 void replace_noninst_phientry_toinst(Function *F){
   for (BasicBlock &BB : *F){
@@ -187,6 +191,53 @@ void remove_from_phi(BasicBlock *curr){
     }
   }
 }
+
+// bool fix_phi_nodes(BasicBlock *curr) {
+
+//   auto *Old = curr;
+//   auto *New = prev;
+//   for (PHINode &phi : succ->phis()){
+//     for (unsigned Op = 0, NumOps = phi.getNumOperands(); Op != NumOps; ++Op)
+//       if (phi.getIncomingBlock(Op) == Old)
+//         phi.setIncomingBlock(Op, New);
+//   }
+
+// }
+
+BasicBlock *get_alive_parent_dom(DominatorTree *DT, std::set<BasicBlock*> &alive_blocks, BasicBlock *BB){
+
+  BasicBlock *curr = BB;
+  while(curr != nullptr && alive_blocks.find(curr) == alive_blocks.end()){
+    curr = DT->getNode(curr)->getIDom()->getBlock();
+  }
+
+  if (curr != nullptr)
+    return curr;
+
+  llvm_unreachable("Could not find an alive dominator");
+}
+
+/*
+  For each PHI node, if the incoming block is dead, then, replace the block
+  by the actual block where the variable is defined.
+*/
+void fix_phi_nodes(Function *F, DominatorTree *DT, std::set<BasicBlock*> &alive_blocks){
+  for (BasicBlock &BB : *F){
+    for (PHINode &PHI : BB.phis()){
+      for (unsigned Op = 0, NumOps = PHI.getNumOperands(); Op != NumOps; ++Op){
+
+        auto *block = PHI.getIncomingBlock(Op);
+        // check if @block is dead or alive
+        if (alive_blocks.find(block) == alive_blocks.end()){
+          // @block is dead
+          PHI.setIncomingBlock(Op, get_alive_parent_dom(DT, alive_blocks, block));
+        }
+
+      }
+    }
+  }
+}
+
 
 /*
   Remove the edge from @pred to @curr and create a new one from @pred to @postdom
@@ -270,8 +321,9 @@ std::vector<BasicBlock *> get_predecessors(BasicBlock *BB) {
 }
 
 void erase_block(BasicBlock *BB) {
-  errs() << "Deleting block: " << BB->getName() << "\n\n";
-  remove_from_phi(BB);
+  // errs() << "Deleting block: " << BB->getName() << "\n\n";
+  // remove_from_phi(BB);
+  // fix_phi_nodes(BB);
   BB->dropAllReferences();
   BB->eraseFromParent();
 }
@@ -453,7 +505,7 @@ void remove_block(PostDominatorTree &PDT,
   auto path = bfs(alive, curr, postdom);
   for (auto *p : path) {
     replace_jump_by_selfedge(p->from);
-    errs() << "Updating PDT: " << p->from->getName() << " -> " << p->to->getName() << "\n";
+    // errs() << "Updating PDT: " << p->from->getName() << " -> " << p->to->getName() << "\n";
   }
 
   for (auto *p : path)
@@ -499,35 +551,34 @@ void ProgramSlicing::slice(Function *F, Instruction *I) {
   std::set<BasicBlock *> alive_blocks = compute_alive_blocks(F, dependences);
   std::vector<BasicBlock *> dead_blocks = compute_dead_blocks(F, alive_blocks);
 
+  // F->viewCFG();
+
   PostDominatorTree PDT;
-  // DominatorTree DT(*F);
+  DominatorTree DT(*F);
+
+  fix_phi_nodes(F, &DT, alive_blocks);
   // DominanceFrontier DF;
   // DF.analyze(DT);
 
   // RegionInfo RI;
   // RI.recalculate(*F, &DT, &PDT, &DF);
 
-  F->viewCFG();
-
   while (!dead_blocks.empty()) {
     PDT.recalculate(*F);
     auto *curr = *dead_blocks.begin();
     dead_blocks.erase(dead_blocks.begin());
     BasicBlock *postdom = PDT.getNode(curr)->getIDom()->getBlock();
-    errs() << "curr: " << curr->getName() << " -> postdom: " << postdom->getName() << "\n";
+    // errs() << "curr: " << curr->getName() << " -> postdom: " << postdom->getName() << "\n";
     remove_block(PDT, alive_blocks, dead_blocks, curr, postdom);
   }
 
 
   // u.run(*F, FAM);
   // si.run(*F, FAM);
-  F->viewCFG();
+  // F->viewCFG();
   sf.run(*F, FAM);
 
   // delete_blocks(F, alive_blocks);
-
-  // F->viewCFG();
-  // sf.run(*F, FAM);
 
   // VerifierPass ver;
   // ver.run(*F, FAM);
