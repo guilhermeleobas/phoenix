@@ -373,8 +373,8 @@ void delete_empty_blocks(Function *F) {
   std::queue<BasicBlock *> q;
   for (auto &BB : *F) {
     if (BB.empty()) {
-      assert(num_pred(&BB) == 1 && "Basic Block has more than one predecessor here!");
-      remove_successor(BB.getSinglePredecessor(), &BB);
+      for (BasicBlock *pred : get_predecessors(&BB))
+        remove_successor(pred, &BB);
       q.push(&BB);
     }
   }
