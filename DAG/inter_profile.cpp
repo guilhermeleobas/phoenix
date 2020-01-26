@@ -508,13 +508,14 @@ static PHINode *getInductionVariable(Loop *L) {
   for (BasicBlock::iterator I = H->begin(); isa<PHINode>(I); ++I) {
     PHINode *PN = cast<PHINode>(I);
     Value *iv = PN->getIncomingValueForBlock(Incoming);
-    if (isa<ConstantInt>(iv) || isa<PHINode>(iv) || 
-        (isa<LoadInst>(iv) && LoadingFromGlobal(iv)))
+    if (isa<ConstantInt>(iv) || isa<PHINode>(iv) || isa<SExtInst>(iv) ||
+        (isa<LoadInst>(iv) && LoadingFromGlobal(iv))){
       if (Instruction *Inc = dyn_cast<Instruction>(PN->getIncomingValueForBlock(Backedge)))
         if ((Inc->getOpcode() == Instruction::Add && Inc->getOperand(0) == PN) ||
             (Inc->getOpcode() == Instruction::Sub && Inc->getOperand(0) == PN))
           if (ConstantInt *CI = dyn_cast<ConstantInt>(Inc->getOperand(1)))
             return PN;
+    }
   }
 
   return nullptr;
@@ -557,7 +558,6 @@ static void change_loop_range(Function *C, Loop *L) {
     BasicBlock *incoming = iv->getIncomingBlock(i);
     if (incoming == L->getLoopLatch()) {
       Instruction *Inc = cast<Instruction>(iv->getOperand(i));
-      errs() << "Inst: " << *Inc << "\n";
 
       // we know now that the *I is the increment instruction
       for (int j = 0; j < Inc->getNumOperands(); j++) {
@@ -587,10 +587,7 @@ static void change_loop_range(Function *C, Loop *L) {
             if (!array_size->getType()->isIntegerTy(64))
               array_size = Builder.CreateSExt(array_size, I64Ty);
 
-            errs() << "sext: " << *sext << "\n";
-            errs() << "array_size: " << *array_size << "\n";
             Value *final_rem = Builder.CreateSRem(sext, array_size, "finalrem");
-            errs() << "final_rem: " << *final_rem << "\n\n";
             // replaces the uses of I with final_rem
             sext->replaceAllUsesWith(final_rem);
 
