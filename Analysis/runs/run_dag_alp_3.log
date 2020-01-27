@@ -1,0 +1,38 @@
+Seq	Host	Starttime	JobRuntime	Send	Receive	Exitval	Signal	Command
+1	:	1580086508.005	     2.324	0	0	0	0	cd /home/guilhermel/Programs/tf/Benchs/TSVC/Recurrences-dbl && timeout --signal=TERM 0 ./INS_Recurrences-dbl.exe  20000 14  < /dev/null &> /dev/null
+2	:	1580086510.332	     2.760	0	0	0	0	cd /home/guilhermel/Programs/tf/Benchs/TSVC/Recurrences-flt && timeout --signal=TERM 0 ./INS_Recurrences-flt.exe  20000 5  < /dev/null &> /dev/null
+3	:	1580086513.095	     0.842	0	0	0	0	cd /home/guilhermel/Programs/tf/Benchs/VersaBench/dbms && timeout --signal=TERM 0 ./INS_dbms.exe -i /home/guilhermel/Programs/tf/Benchs/VersaBench/dbms/dbms.ref.in < /dev/null &> /dev/null
+4	:	1580086513.939	     0.571	0	0	0	0	cd /home/guilhermel/Programs/tf/Benchs/Misc/ffbench && timeout --signal=TERM 0 ./INS_ffbench.exe   < /dev/null &> /dev/null
+5	:	1580086514.512	     3.317	0	0	0	0	cd /home/guilhermel/Programs/tf/Benchs/VersaBench/bmm && timeout --signal=TERM 0 ./INS_bmm.exe 1024 64 < /dev/null &> /dev/null
+6	:	1580086517.833	     0.035	0	0	0	0	cd /home/guilhermel/Programs/tf/Benchs/McCat/08-main && timeout --signal=TERM 0 ./INS_08-main.exe  < /dev/null &> /dev/null
+7	:	1580086517.870	     0.817	0	0	0	0	cd /home/guilhermel/Programs/tf/Benchs/MallocBench/cfrac && timeout --signal=TERM 0 ./INS_cfrac.exe 41757646344123832613190542166099121 < /dev/null &> /dev/null
+8	:	1580086518.689	     5.112	0	0	0	0	cd /home/guilhermel/Programs/tf/Benchs/DOE_ProxyApps_C/miniGMG && timeout --signal=TERM 0 ./INS_miniGMG.exe  6  2 2 2  1 1 1  < /dev/null &> /dev/null
+9	:	1580086523.803	     0.078	0	0	0	0	cd /home/guilhermel/Programs/tf/Benchs/FreeBench/neural && timeout --signal=TERM 0 ./INS_neural.exe /home/guilhermel/Programs/tf/Benchs/FreeBench/neural/test.in < /dev/null &> /dev/null
+10	:	1580086523.883	     5.238	0	0	0	0	cd /home/guilhermel/Programs/tf/Benchs/cBench/consumer_jpeg_c/src && ./__run 1 INS_consumer_jpeg_c.exe
+11	:	1580086529.124	     4.756	0	0	0	0	cd /home/guilhermel/Programs/tf/Benchs/tramp3d-v4 && timeout --signal=TERM 0 ./INS_tramp3d-v4.exe  --cartvis 1.0 0.0 --rhomin 1e-8 -n 4 --domain 32 32 32 < /dev/null &> /dev/null
+12	:	1580086533.884	     3.218	0	0	0	0	cd /home/guilhermel/Programs/tf/Benchs/TSVC/LinearDependence-flt && timeout --signal=TERM 0 ./INS_LinearDependence-flt.exe  3570 5  < /dev/null &> /dev/null
+13	:	1580086537.105	     3.805	0	0	0	0	cd /home/guilhermel/Programs/tf/Benchs/TSVC/LinearDependence-dbl && timeout --signal=TERM 0 ./INS_LinearDependence-dbl.exe  3570 14  < /dev/null &> /dev/null
+14	:	1580086540.913	     0.037	0	0	0	0	cd /home/guilhermel/Programs/tf/Benchs/MallocBench/gs && timeout --signal=TERM 0 ./INS_gs.exe -DNODISPLAY /home/guilhermel/Programs/tf/Benchs/MallocBench/gs/INPUT/large.ps < /dev/null &> /dev/null
+15	:	1580086540.953	     0.313	0	0	0	0	cd /home/guilhermel/Programs/tf/Benchs/MallocBench/espresso && timeout --signal=TERM 0 ./INS_expresso.exe -t /home/guilhermel/Programs/tf/Benchs/MallocBench/espresso/INPUT/largest.espresso < /dev/null &> /dev/null
+16	:	1580086541.269	     0.184	0	0	0	0	cd /home/guilhermel/Programs/tf/Benchs/Olden/health && timeout --signal=TERM 0 ./INS_health.exe 9 20 1 < /dev/null &> /dev/null
+17	:	1580086541.456	     2.141	0	0	0	0	cd /home/guilhermel/Programs/tf/Benchs/TSVC/StatementReordering-flt && timeout --signal=TERM 0 ./INS_StatementReordering-flt.exe  20000 5  < /dev/null &> /dev/null
+18	:	1580086543.600	     2.778	0	0	0	0	cd /home/guilhermel/Programs/tf/Benchs/TSVC/StatementReordering-dbl && timeout --signal=TERM 0 ./INS_StatementReordering-dbl.exe  20000 14  < /dev/null &> /dev/null
+19	:	1580086546.380	     2.339	0	0	0	0	cd /home/guilhermel/Programs/tf/Benchs/TSVC/Expansion-dbl && timeout --signal=TERM 0 ./INS_Expansion-dbl.exe  4160 14  < /dev/null &> /dev/null
+20	:	1580086548.722	     1.376	0	0	0	0	cd /home/guilhermel/Programs/tf/Benchs/TSVC/Expansion-flt && timeout --signal=TERM 0 ./INS_Expansion-flt.exe  4160 5  < /dev/null &> /dev/null
+21	:	1580086550.101	     2.370	0	0	0	0	cd /home/guilhermel/Programs/tf/Benchs/TSVC/ControlLoops-dbl && timeout --signal=TERM 0 ./INS_ControlLoops-dbl.exe  1640 14  < /dev/null &> /dev/null
+22	:	1580086552.474	     2.276	0	0	0	0	cd /home/guilhermel/Programs/tf/Benchs/TSVC/ControlLoops-flt && timeout --signal=TERM 0 ./INS_ControlLoops-flt.exe  1640 5  < /dev/null &> /dev/null
+23	:	1580086554.752	     0.674	0	0	0	0	cd /home/guilhermel/Programs/tf/Benchs/Ptrdist/anagram && timeout --signal=TERM 0 ./INS_anagram.exe  words 2  < input.OUT &> /dev/null
+24	:	1580086555.429	     3.890	0	0	0	0	cd /home/guilhermel/Programs/tf/Benchs/cBench/consumer_lame/src && ./__run 1 INS_consumer_lame.exe
+25	:	1580086559.321	     0.074	0	0	0	0	cd /home/guilhermel/Programs/tf/Benchs/ASCI_Purple && timeout --signal=TERM 0 ./INS_smg2000.exe  -n 30 15 30 -c 0.1 1.0 10.0  < /dev/null &> /dev/null
+26	:	1580086559.399	     0.120	0	0	0	0	cd /home/guilhermel/Programs/tf/Benchs/FreeBench/distray && timeout --signal=TERM 0 ./INS_distray.exe /home/guilhermel/Programs/tf/Benchs/FreeBench/distray/test.in < /dev/null &> /dev/null
+27	:	1580086559.521	    17.223	0	0	0	0	cd /home/guilhermel/Programs/tf/Benchs/cBench/consumer_jpeg_d/src && ./__run 1 INS_consumer_jpeg_d.exe
+28	:	1580086576.748	     0.081	0	0	0	0	cd /home/guilhermel/Programs/tf/Benchs/mediabench/g721/g721encode && timeout --signal=TERM 0 ./INS_g721.exe  <  ../data/clinton.pcm  &> /dev/null
+29	:	1580086576.831	     0.583	0	0	0	0	cd /home/guilhermel/Programs/tf/Benchs/Ptrdist/yacr2 && timeout --signal=TERM 0 ./INS_yacr2.exe  input2.in  < /dev/null &> /dev/null
+30	:	1580086577.417	     1.924	0	0	0	0	cd /home/guilhermel/Programs/tf/Benchs/DOE_ProxyApps_C/Pathfinder && timeout --signal=TERM 0 ./INS_Pathfinder.exe  -x medsmall1.adj_list  < /dev/null &> /dev/null
+31	:	1580086579.343	     6.322	0	0	0	0	cd /home/guilhermel/Programs/tf/Benchs/cBench/consumer_tiffdither/src && ./__run 1 INS_consumer_tiffdither.exe
+32	:	1580086585.668	     3.745	0	0	0	0	cd /home/guilhermel/Programs/tf/Benchs/cBench/bzip2e/src && ./__run 1 INS_bzip2e.exe
+33	:	1580086589.415	     2.896	0	0	0	0	cd /home/guilhermel/Programs/tf/Benchs/TSVC/ControlFlow-flt && timeout --signal=TERM 0 ./INS_ControlFlow-flt.exe  2325 5  < /dev/null &> /dev/null
+34	:	1580086592.313	     2.111	0	0	0	0	cd /home/guilhermel/Programs/tf/Benchs/TSVC/GlobalDataFlow-flt && timeout --signal=TERM 0 ./INS_GlobalDataFlow-flt.exe  3450 5  < /dev/null &> /dev/null
+35	:	1580086594.426	     2.132	0	0	0	0	cd /home/guilhermel/Programs/tf/Benchs/TSVC/InductionVariable-flt && timeout --signal=TERM 0 ./INS_InductionVariable-flt.exe  9100 5  < /dev/null &> /dev/null
+36	:	1580086596.561	     2.582	0	0	0	0	cd /home/guilhermel/Programs/tf/Benchs/TSVC/LoopRestructuring-flt && timeout --signal=TERM 0 ./INS_LoopRestructuring-flt.exe  4350 5  < /dev/null &> /dev/null
+37	:	1580086599.146	     1.127	0	0	0	0	cd /home/guilhermel/Programs/tf/Benchs/TSVC/Symbolics-flt && timeout --signal=TERM 0 ./INS_Symbolics-flt.exe  9090 5  < /dev/null &> /dev/null
