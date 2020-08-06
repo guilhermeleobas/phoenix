@@ -2,7 +2,7 @@ FROM ubuntu:16.04
 
 RUN apt update -y
 
-RUN apt install -y git wget xz-utils parallel gcc make cmake g++
+RUN apt install -y git wget xz-utils parallel gcc make cmake g++ vim
 
 RUN git clone https://github.com/guilhermeleobas/phoenix
 RUN git clone --branch phoenix --recursive https://github.com/guilhermeleobas/tf
