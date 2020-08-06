@@ -217,7 +217,7 @@ void create_BBControl(Function *F,
   // if c2 > gap then we change switch_control to jump to BBOpt, otherwise,
   // jump to BB
   Value *gap_cmp = Builder.CreateICmpSGE(c2, gap, "gap.cmp");
-  Value *new_target = Builder.CreateSelect(gap_cmp, BBOpt_target_value, BB_target_value);
+  Value *new_target = Builder.CreateSelect(gap_cmp, BB_target_value, BB_target_value);
 
   // decide if it is time to change the switch jump
   Value *iter_cmp = Builder.CreateICmpEQ(c1, n_iter, "iter.cmp");
