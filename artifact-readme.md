@@ -122,8 +122,19 @@ The variable `benchs` on file `benchs.sh` controls which benchmarks are compiled
 # Problems
 
 This artifact was not thoroughly tested. Thus, there may be some unnoticed
-problems by the authors. At the moment, we are aware of the following problem:
+problems by the authors. At the moment, we are aware of the following problem.
+The slicing algorithm used by the PLP version of semiring optimization assumes
+a few properties:
 
-- There are some issues with the slicing algorithm used by the **plp** optimization since it assumes a certain loop shape. Thus, compilation may fail in some benchmarks.
+- Loop must contain only one induction variable.
+- Increment happens in the latch block.
+- Loop must be of the form:
+```
+Loop Header --> Loop Body --> Loop Latch --+
+   ^---------------------------------------|
+```
+
+If this algorithm is applied onto loops that do not meet this contract, 
+then compilation will fail.
 
 If you have further problems, e-mail: guilhermeleobas@gmail.com
