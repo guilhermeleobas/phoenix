@@ -124,6 +124,6 @@ The variable `benchs` on file `benchs.sh` controls which benchmarks are compiled
 This artifact was not thoroughly tested. Thus, there may be some unnoticed
 problems by the authors. At the moment, we are aware of the following problem:
 
-- There is some issues with the slicing algorithm used by the **plp** optimization since it assumes a certain loop shape. Thus, compilation may fail in some benchmarks.
+- There are some issues with the slicing algorithm used by the **plp** optimization since it assumes a certain loop shape. Thus, compilation may fail in some benchmarks.
 
 If you have further problems, e-mail: guilhermeleobas@gmail.com
