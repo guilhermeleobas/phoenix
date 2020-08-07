@@ -41,11 +41,11 @@ This artifact is composed by the following directories:
 
 - **Phoenix**: The optimization implementation;
 - **llvm61**: The binaries of LLVM 6.0.1;
-- **tf**: A list of scripts that will be used to evaluate the optimization proposed;
+- **tf**: A list of scripts that will be used to evaluate the proposed optimization;
 - **tf/Benchs**: The 287 benchmarks used in the experiments of this paper;
 
 # TF - Testing Framework
-TF contains a set of scripts we use to benchmark the optimization proposed.
+TF contains a set of scripts we use to benchmark the proposed optimization.
 
 ## List of Benchmarks
 - ASCI_Purple
