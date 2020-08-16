@@ -149,7 +149,7 @@ static void create_controller(Function *F,
     // cmp = Builder.CreateAnd(cmp, calls[i]);
   }
 
-  auto *br = Builder.CreateCondBr(cmp, L->getLoopPreheader(), L->getLoopPreheader());
+  auto *br = Builder.CreateCondBr(cmp, C->getLoopPreheader(), L->getLoopPreheader());
   // add_dump_msg(C->getLoopPreheader(), "going to clone\n");
   // add_dump_msg(C->getLoopPreheader(), F->getName());
   // add_dump_msg(L->getLoopPreheader(), "going to original loop\n");
