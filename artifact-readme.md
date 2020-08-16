@@ -149,6 +149,8 @@ id,marked,silent,total
 9,0,132800,1563000
 ```
 
+Second to last column contains a boolean value indicating if the store was marked (1) or not (0), the number of times that store was silent and the total number of executions.
+
 ## Speedup
 
 For a given benchmark, to compare the runtimes with and without the optimization, run:
@@ -186,3 +188,4 @@ If this algorithm is applied onto loops that do not meet this contract,
 then compilation will fail.
 
 If you have further problems, e-mail: guilhermeleobas@gmail.com
+
