@@ -31,9 +31,9 @@ After downloading everything, edit `tf/vars.sh` and set `LLVM_PATH` and `PHOENIX
 Then, `cd` into `$PHOENIX_PATH` and build the optimization for the first time:
 ```bash
 CMAKE_PREFIX_PATH=$LLVM_PATH \
-CXX=$LLVM_PATH/bin/clang \
-LLVM_DIR=$LLVM_PATH/build/lib/cmake \
-bash rebuild.sh
+    CXX=$LLVM_PATH/bin/clang \
+    LLVM_DIR=$LLVM_PATH/build/lib/cmake \
+    bash rebuild.sh
 ```
 
 # Directories
