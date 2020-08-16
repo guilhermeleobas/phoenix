@@ -87,7 +87,7 @@ TF contains a set of scripts we use to benchmark the proposed optimization.
 
 TF contains a few environment variables that control its behavior:
 * `COMPILE=1`: Compile a benchmark
-* `RUN=1`: Run a benchmark
+* `EXEC=1`: Run a benchmark
 * `INSTRUMENT=1`: Compile the benchmark with a custom optimization
     * `PASS=DAG`: The name of the optimization. In our case, the optimization is called `DAG`.
     * `PASS_OPT=`
@@ -102,22 +102,70 @@ TF contains a few environment variables that control its behavior:
 
 To compile a benchmark, type:
 ```
-COMPILE=1 RUN=0 ./run.sh
+COMPILE=1 EXEC=0 ./run.sh
 ```
 
 To compile and execute a single benchmark, type the same command with the relative path to the benchmark as argument:
 ```
-COMPILE=1 RUN=1 ./run.sh Benchs/Stanford/QuickSort
+COMPILE=1 EXEC=1 ./run.sh Benchs/Stanford/Quicksort/
+```
+
+To just compile a benchmark, set `EXEC=0`:
+```
+COMPILE=1 EXEC=0 ./run.sh Benchs/PolyBench/linear-algebra/solvers/lu
 ```
 
 To apply our optimization to a benchmark, type:
 ```
-COMPILE=1 RUN=1 INSTRUMENT=1 PASS=DAG PASS_OPT=plp ./run.sh Benchs/PoliBench/linear-algebra/solvers/cholesky
+COMPILE=1 EXEC=1 INSTRUMENT=1 PASS=DAG PASS_OPT=plp ./run.sh Benchs/PolyBench/linear-algebra/solvers/cholesky
 ```
 
 A file with the name `run.log` is created at the root of the project containing the job runtime, the command used, the exit signal and some other information.
 
 The variable `benchs` on file `benchs.sh` controls which benchmarks are compiled and executed by default. By default it contains all benchmarks available at the moment. 
+
+# Research Questions
+
+In this section, we provide some of the commands used in a few research questions.
+
+## Prevalence
+
+The pass `CountStores` will instrument every store in the program to record when the store was silent or not as well as if the store was marked or not. For instance, the command below instruments the program `Stanford/Quicksort` and produces a file called `store.txt` in the same directory.
+
+```
+$ COMPILE=1 EXEC=1 INSTRUMENT=1 PASS=CountStores ./run.sh Benchs/Stanford/Quicksort/
+
+$ cat Benchs/Stanford/Quicksort/store.txt
+id,marked,silent,total
+0,0,0,0
+1,0,0,100
+2,0,0,500000
+3,0,1,100
+4,0,1,100
+5,0,0,500000
+6,0,0,500
+7,0,0,400
+8,0,132800,1563000
+9,0,132800,1563000
+```
+
+## Speedup
+
+For a given benchmark, to compare the runtimes with and without the optimization, run:
+
+```
+$ COMPILE=1 EXEC=1 ./run.sh Benchs/PolyBench/linear-algebra/solvers/cholesky
+
+$ cat run.log
+Seq     Host    Starttime       JobRuntime      Send    Receive Exitval Signal  Command
+1       :       1597605558.267      66.910      0       0       0       0       cd /home/guilhermel/Programs/tf_phoenix/Benchs/PolyBench/linear-algebra/solvers/cholesky && timeout --signal=TERM 0 ./cholesky.exe   < /dev/null &> /dev/null
+
+$ COMPILE=1 EXEC=1 INSTRUMENT=1 PASS=DAG PASS_OPT=plp ./run.sh Benchs/PolyBench/linear-algebra/solvers/cholesky
+
+$ cat run.log
+Seq     Host    Starttime       JobRuntime      Send    Receive Exitval Signal  Command
+1       :       1597607159.770      32.927      0       0       0       0       cd /home/guilhermel/Programs/tf_phoenix/Benchs/PolyBench/linear-algebra/solvers/cholesky && timeout --signal=TERM 0 ./INS_cholesky.exe   < /dev/null &> /dev/null
+```
 
 # Problems
 
