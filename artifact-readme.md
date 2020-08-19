@@ -169,6 +169,87 @@ Seq     Host    Starttime       JobRuntime      Send    Receive Exitval Signal  
 1       :       1597607159.770      32.927      0       0       0       0       cd /home/guilhermel/Programs/tf_phoenix/Benchs/PolyBench/linear-algebra/solvers/cholesky && timeout --signal=TERM 0 ./INS_cholesky.exe   < /dev/null &> /dev/null
 ```
 
+## Impact in compilation time
+
+Apply the following diff inside `tf`
+
+```bash
+diff --git a/instrument.sh b/instrument.sh
+index 506cecc..1d00cd0 100644
+--- a/instrument.sh
++++ b/instrument.sh
+@@ -25,15 +25,18 @@ function compile() {
+   fi
+
+   # common optimizations
+-  $LLVM_PATH/opt -S -mem2reg -instcombine -early-cse -indvars -loop-simplify -instnamer $lnk_name -o $prf_name.opt.1
++  echo "common optimizations time"
++  /usr/bin/time -f "%e" $LLVM_PATH/opt -S -mem2reg -instcombine -early-cse -indvars -loop-simplify -instnamer $lnk_name -o $prf_name.opt.1
+   # my optimization
+   if [[ ${PASS} =~ "DAG" ]]; then
+-    $LLVM_PATH/opt -S -load $pass_path -${PASS} -dag-opt=${PASS_OPT} $prf_name.opt.1 -o $prf_name.opt.2
++    echo "ring optimization time"
++    /usr/bin/time -f "%e" $LLVM_PATH/opt -S -load $pass_path -${PASS} -dag-opt=${PASS_OPT} $prf_name.opt.1 -o $prf_name.opt.2
+   else
+     $LLVM_PATH/opt -S -load $pass_path -${PASS} $prf_name.opt.1 -o $prf_name.opt.2
+   fi
+   # Opt
+-  $LLVM_PATH/opt -S ${OPT} -load-store-vectorizer -loop-vectorize $prf_name.opt.2 -o $prf_name.opt.3
++  echo "-O3 optimization time"
++  /usr/bin/time -f "%e" $LLVM_PATH/opt -S ${OPT} -load-store-vectorizer -loop-vectorize $prf_name.opt.2 -o $prf_name.opt.3
+
+   if [[ $PASS = "CountArith" || $PASS = "CountStores" ]]; then
+     # Compile our instrumented file, in IR format, to x86:
+
+```
+
+Get the compilation times by executing the following:
+
+* **ess**
+    * `COMPILE=1 EXEC=0 INSTRUMENT=1 PASS=DAG PASS_OPT=ess ./run.sh path/to/benchmark`
+* **eae**
+    * `COMPILE=1 EXEC=0 INSTRUMENT=1 PASS=DAG PASS_OPT=eae ./run.sh path/to/benchmark`
+* **alp**
+    * `COMPILE=1 EXEC=0 INSTRUMENT=1 PASS=DAG PASS_OPT=alp ./run.sh path/to/benchmark`
+* **plp**
+    * `COMPILE=1 EXEC=0 INSTRUMENT=1 PASS=DAG PASS_OPT=plp ./run.sh path/to/benchmark`
+
+
+## Overhead
+
+Install from source and apply the following diff inside `/phoenix`:
+
+```bash
+diff --git a/DAG/inter_profile.cpp b/DAG/inter_profile.cpp
+index dd7e69a..6412d8c 100644
+--- a/DAG/inter_profile.cpp
++++ b/DAG/inter_profile.cpp
+@@ -149,7 +149,7 @@ static void create_controller(Function *F,
+     // cmp = Builder.CreateAnd(cmp, calls[i]);
+   }
+
+-  auto *br = Builder.CreateCondBr(cmp, C->getLoopPreheader(), L->getLoopPreheader());
++  auto *br = Builder.CreateCondBr(cmp, L->getLoopPreheader(), L->getLoopPreheader());
+   // add_dump_msg(C->getLoopPreheader(), "going to clone\n");
+   // add_dump_msg(C->getLoopPreheader(), F->getName());
+   // add_dump_msg(L->getLoopPreheader(), "going to original loop\n");
+diff --git a/DAG/intra_profile.h b/DAG/intra_profile.h
+index 065b0ea..9dcc142 100644
+--- a/DAG/intra_profile.h
++++ b/DAG/intra_profile.h
+@@ -217,7 +217,7 @@ void create_BBControl(Function *F,
+   // if c2 > gap then we change switch_control to jump to BBOpt, otherwise,
+   // jump to BB
+   Value *gap_cmp = Builder.CreateICmpSGE(c2, gap, "gap.cmp");
+-  Value *new_target = Builder.CreateSelect(gap_cmp, BBOpt_target_value, BB_target_value);
++  Value *new_target = Builder.CreateSelect(gap_cmp, BB_target_value, BB_target_value);
+
+   // decide if it is time to change the switch jump
+   Value *iter_cmp = Builder.CreateICmpEQ(c1, n_iter, "iter.cmp");
+```
+
+This will disable the optimization but the profiler remains.
+
 # Problems
 
 This artifact was not thoroughly tested. Thus, there may be some unnoticed
